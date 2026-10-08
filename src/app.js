@@ -26,11 +26,51 @@ function toast(message) {
 }
 function showPage(page) {
   state.page = page;
-  for (const name of ['discover', 'library', 'settings']) $(`#${name}-page`).hidden = page !== name;
+  for (const name of ['discover', 'library', 'hosting', 'settings']) $(`#${name}-page`).hidden = page !== name;
   $$('[data-page]').forEach(button => button.classList.toggle('active', button.dataset.page === page));
-  $('#breadcrumb').textContent = `Workspace / ${page === 'library' ? 'My library' : page === 'settings' ? 'Settings & about' : 'Discover'}`;
+  $('#breadcrumb').textContent = `Workspace / ${page === 'library' ? 'My library' : page === 'hosting' ? 'Host Server' : page === 'settings' ? 'Settings & about' : 'Discover'}`;
   if (page === 'library') renderLibrary();
   window.scrollTo({ top: 0 });
+  updateHostingLayout();
+  if (page === 'hosting') {
+    if (window.mml) window.mml.showHosting().then(renderHostingStatus).catch(error => renderHostingStatus({ state: 'error', message: error.message }));
+    else renderHostingStatus({ state: 'preview' });
+  }
+}
+
+function updateHostingLayout() {
+  if (!window.mml) return;
+  const rect = $('#hosting-viewport').getBoundingClientRect();
+  window.mml.setHostingLayout({ visible: state.page === 'hosting' && !document.querySelector('dialog[open]'), bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
+}
+
+function renderHostingStatus(status) {
+  const titles = { idle: 'Your server workspace', loading: 'Connecting to MMSM…', ready: 'MMSM is ready', error: 'Could not connect to MMSM', preview: 'Continue to MMSM' };
+  $('#hosting-status').textContent = { idle: 'Ready to connect', loading: 'Connecting…', ready: 'Connected', error: 'Connection unavailable', preview: 'Browser preview' }[status.state] || '';
+  $('#hosting-placeholder').hidden = status.state === 'ready';
+  $('#hosting-message-title').textContent = titles[status.state] || titles.idle;
+  $('#hosting-message').textContent = status.message || (status.state === 'preview' ? 'MMSM opens inside the Windows launcher. Use Open in browser to visit it from this preview.' : 'Your server manager will appear here. You can also open it in your browser.');
+  $('#hosting-retry').hidden = status.state !== 'error';
+  updateHostingLayout();
+}
+
+function reloadHosting() {
+  if (!window.mml) return toast('The embedded server manager is available in the Windows launcher.');
+  window.mml.reloadHosting().then(renderHostingStatus).catch(error => renderHostingStatus({ state: 'error', message: error.message }));
+}
+
+$('#hosting-external').onclick = () => {
+  if (window.mml) window.mml.openHosting().catch(error => toast(error.message));
+  else window.open('https://mmsm.mrhaydenn.us/', '_blank', 'noopener,noreferrer');
+};
+$('#hosting-reload').onclick = reloadHosting;
+$('#hosting-retry').onclick = reloadHosting;
+if (window.mml) {
+  window.mml.onHostingStatus(renderHostingStatus);
+  new ResizeObserver(updateHostingLayout).observe($('#hosting-viewport'));
+  new MutationObserver(updateHostingLayout).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
+  window.addEventListener('resize', updateHostingLayout);
+  window.addEventListener('scroll', updateHostingLayout, { passive: true });
 }
 
 async function search() {

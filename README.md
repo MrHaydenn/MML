@@ -1,6 +1,6 @@
 # MrHaydenn's Minecraft Launcher (MML)
 
-A Windows-first Minecraft modpack workspace. **Working title · 0.1.0 UI preview.**
+A Windows-first Minecraft modpack workspace. **Working title · 0.1.1 UI preview.**
 
 An original charcoal, olive, and amber interface with a familiar launcher structure: discovery, your library, and profile creation.
 
@@ -12,6 +12,7 @@ An original charcoal, olive, and amber interface with a familiar launcher struct
 - Create and remove local planning profiles, including profiles inspired by a Modrinth pack.
 - Persistent local library, explicit loading/error/empty states, and native window controls.
 - Windows x64 installer and CI build configuration.
+- **Host Server** sidebar tab opens [MMSM](https://mmsm.mrhaydenn.us/) inside the Windows launcher, with reload and an external-browser fallback.
 
 **This milestone does not install modpacks or launch Minecraft.** Profiles are planning records, not installed instances. Microsoft authentication, Java management, loader installation, `.mrpack` import/export, content downloads and game launch are future milestones. Browsing public Modrinth content does not require an API key.
 
@@ -29,12 +30,15 @@ Other commands:
 ```powershell
 pnpm test       # Backend validation, concurrency, storage integrity, API error handling
 pnpm test:live  # Real Modrinth search, details, releases, and game versions
+pnpm test:hosting # Real Electron MMSM view, isolation, and tab visibility
 pnpm preview    # UI preview at http://127.0.0.1:4173
 pnpm pack       # Unpacked Windows application in release/win-unpacked
 pnpm dist       # Windows x64 NSIS installer in release/
 ```
 
-The installer is unsigned during development. No certificate or automatic update service is configured. The browser preview uses a separate `.preview-data` library and does not open native folders or external pages.
+The installer is unsigned during development. No certificate or automatic update service is configured. The browser preview uses a separate `.preview-data` library. Its Host Server tab opens MMSM in a browser tab; the desktop app embeds it.
+
+MMSM uses an isolated Electron `WebContentsView` with its own persistent browser session. The page has no launcher preload bridge or Node access. The launcher loads only the MMSM origin in the embedded view; other HTTP(S) links open in the system browser. Loading failures provide retry and browser fallback controls. Site response headers remain intact, including its iframe restrictions.
 
 ## Structure
 

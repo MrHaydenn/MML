@@ -1,9 +1,10 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
 const { createClient } = require('./modrinth.cjs');
 const { createLibrary } = require('./library.cjs');
+const { createHosting } = require('./hosting.cjs');
 const page = path.join(__dirname, '../src/index.html');
 let window;
 
@@ -38,6 +39,14 @@ app.whenReady().then(() => {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
+  const hosting = createHosting(window, { WebContentsView, shell });
+  handle('hosting:show', () => hosting.show());
+  handle('hosting:reload', () => hosting.reload());
+  handle('hosting:openExternal', () => hosting.openExternal());
+  ipcMain.on('hosting:layout', (event, input) => {
+    if (!trusted(event)) return;
+    try { hosting.setLayout(input); } catch { /* Ignore malformed layout messages. */ }
+  });
   window.loadFile(page);
 });
 app.on('window-all-closed', () => app.quit());
