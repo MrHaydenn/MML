@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.modrinth.com data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>MML · Your next world</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="titlebar"><span class="titlebar-brand"><span class="tiny-cube">M</span> MRHAYDENN'S MINECRAFT LAUNCHER <span class="alpha">PREVIEW 0.1</span></span><div class="window-controls"><button data-window="minimize" aria-label="Minimize">−</button><button data-window="maximize" aria-label="Maximize">□</button><button data-window="close" aria-label="Close">×</button></div></header>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">M<span>▰</span></span><div>MML<span>A place for your worlds.</span></div></div>
+      <div class="nav-caption">WORKSPACE</div>
+      <nav aria-label="Main navigation"><button class="nav-item active" data-page="discover"><span>◈</span>Discover<span class="nav-arrow">↗</span></button><button class="nav-item" data-page="library"><span>▦</span>My library<span id="library-count" class="count">0</span></button></nav>
+      <button id="sidebar-create" class="sidebar-create"><span>＋</span> Create a profile</button>
+      <div class="sidebar-note"><span class="small-dot"></span> A little more you.<p>Your packs. Your setup.<br>Your next great adventure.</p><div class="mini-landscape"><i></i><i></i><i></i></div></div>
+      <div class="sidebar-bottom"><button class="nav-item" data-page="settings"><span>⚙</span>Settings & about</button><div class="local-user"><span class="avatar">H</span><div>Local workspace<small>Windows · UI preview</small></div><span class="small-dot"></span></div></div>
+    </aside>
+    <main>
+      <div class="topline"><span id="breadcrumb">Workspace <b>/</b> Discover</span><span id="connection" class="connection">Connecting to Modrinth…</span></div>
+      <section id="discover-page">
+        <div class="hero"><div class="hero-copy"><div class="eyebrow"><span></span> A NEW WORLD STARTS HERE</div><h1>Make room for<br>your next adventure.</h1><p>Find a pack that feels like you.<br>Build something entirely your own.</p><button class="primary" id="hero-create">＋ Create a profile</button><span class="hero-footnote">Small beginnings. Endless possibilities.</span></div><div class="voxel-scene" aria-hidden="true"><div class="sun"></div><div class="cloud cloud-one"></div><div class="cloud cloud-two"></div><div class="mountain back"></div><div class="mountain front"></div><div class="terrain terrain-back"></div><div class="terrain terrain-front"></div><div class="tree tree-one"><i></i></div><div class="tree tree-two"><i></i></div><div class="tree tree-three"><i></i></div><div class="scene-label">THE WORLD IS YOURS TO SHAPE <span>↗</span></div></div></div>
+        <div class="section-heading"><div><div class="eyebrow muted">FIND YOUR NEXT FAVORITE</div><h2>Discover the community</h2></div><span class="powered">Powered by <strong>Modrinth ↗</strong></span></div>
+        <div class="type-tabs" role="tablist" aria-label="Project type"><button role="tab" aria-selected="true" data-type="modpack" class="selected">Modpacks</button><button role="tab" aria-selected="false" data-type="mod">Mods</button><button role="tab" aria-selected="false" data-type="resourcepack">Resource packs</button><button role="tab" aria-selected="false" data-type="shader">Shaders</button></div>
+        <div class="search-row"><label class="search-field"><span>⌕</span><input id="search" type="search" placeholder="Find your next modpack…" aria-label="Search Modrinth"><kbd>Ctrl K</kbd></label><select id="loader-filter" aria-label="Filter by loader"><option value="">All loaders</option><option value="fabric">Fabric</option><option value="forge">Forge</option><option value="neoforge">NeoForge</option><option value="quilt">Quilt</option></select><select id="version-filter" aria-label="Filter by Minecraft version"><option value="">All versions</option></select><select id="sort" aria-label="Sort projects"><option value="downloads">Most downloaded</option><option value="relevance">Relevance</option><option value="updated">Recently updated</option><option value="newest">Newest</option><option value="follows">Most followed</option></select></div>
+        <div class="results-heading"><span id="results-label" aria-live="polite">Finding your next adventure…</span><button id="reset-filters" class="text-button">Reset filters ↺</button></div>
+        <div id="results" class="project-grid" aria-live="polite"></div>
+        <div class="pagination"><button id="previous" class="secondary" disabled>← Previous</button><span id="page-label">Page 1</span><button id="next" class="secondary" disabled>Next →</button></div>
+      </section>
+      <section id="library-page" hidden><div class="section-heading page-heading"><div><div class="eyebrow muted">YOUR OWN LITTLE UNIVERSE</div><h1>My library</h1><p>Give every adventure a place to start.</p></div><button id="library-create" class="primary">＋ Create a profile</button></div><div class="notice">Profile planning is ready. Installing packs and launching Minecraft are coming in a later milestone.</div><div id="library-list" class="project-grid"></div></section>
+      <section id="settings-page" hidden><div class="page-heading"><div class="eyebrow muted">BUILT AROUND YOUR WORLDS</div><h1>Settings & about</h1><p>MrHaydenn's Minecraft Launcher · 0.1.0 preview</p></div><div class="settings-card"><h2>A foundation to build on</h2><p>MML is an independent Windows launcher project. This first milestone focuses on discovering community content and organizing local profiles.</p><dl><dt>Content provider</dt><dd>Modrinth API v2 · public catalog</dd><dt>Local storage</dt><dd>Profiles are saved in your Windows app data folder.</dd><dt>Available now</dt><dd>Search, filters, project details, versions, and profile planning</dd><dt>Next milestones</dt><dd>Pack installation, Microsoft sign-in, Java management, and game launch</dd></dl><button id="open-library" class="secondary">Open profile storage ↗</button></div><p class="legal">Working title. Not affiliated with Modrinth, Mojang, or Microsoft. Project imagery belongs to its respective creators.</p></section>
+      <footer><span><span class="small-dot"></span> Made for the way you play.</span><span>MML <b> / </b> WINDOWS PREVIEW</span></footer>
+    </main>
+  </div>
+  <dialog id="detail-dialog"><div id="detail-content"></div></dialog>
+  <dialog id="create-dialog"><form id="create-form"><div class="dialog-heading"><div><div class="eyebrow muted">SOMETHING OF YOUR OWN</div><h2>Create a profile</h2></div><button type="button" class="icon-button close-dialog" aria-label="Close">×</button></div><p class="dialog-intro">Start planning your next pack. You can install and launch it in a future update.</p><label>Profile name<input id="profile-name" required maxlength="60" placeholder="My next adventure" autocomplete="off"></label><div class="form-row"><label>Minecraft version<select id="profile-version" required><option value="">Loading versions…</option></select></label><label>Mod loader<select id="profile-loader"><option value="fabric">Fabric</option><option value="neoforge">NeoForge</option><option value="forge">Forge</option><option value="quilt">Quilt</option><option value="vanilla">Vanilla</option></select></label></div><p id="profile-source" class="source-note"></p><p id="form-error" role="alert" class="error-text"></p><div class="dialog-actions"><button type="button" class="secondary close-dialog">Cancel</button><button type="submit" id="save-profile" class="primary">Create profile →</button></div></form></dialog>
+  <div id="toast" role="status" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
