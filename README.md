@@ -1,6 +1,6 @@
 # MrHaydenn's Minecraft Launcher (MML)
 
-A Windows-first Minecraft modpack workspace. **Working title · 0.2.0 UI preview.**
+A Windows-first Minecraft modpack workspace. **Working title · 0.3.0 UI preview.**
 
 An original charcoal, olive, and amber interface with a familiar launcher structure: discovery, your library, and profile creation.
 
@@ -36,7 +36,7 @@ pnpm pack       # Unpacked Windows application in release/win-unpacked
 pnpm dist       # Windows x64 NSIS installer in release/
 ```
 
-The installer is unsigned during development. No certificate or automatic update service is configured. The browser preview uses a separate `.preview-data` library. Account pairing is available in the desktop application. The browser preview does not submit or store connection tokens.
+The installer is unsigned during development. No signing certificate is configured. Updates are available in Settings after installation. The browser preview uses a separate `.preview-data` library. Account pairing is available in the desktop application. The browser preview does not submit or store connection tokens.
 
 MMSM uses an isolated Electron `WebContentsView` with its own persistent browser session. The page has no launcher preload bridge or Node access. The launcher loads only the MMSM origin in the embedded view; other HTTP(S) links open in the system browser. Loading failures provide retry and browser fallback controls. Site response headers remain intact, including its iframe restrictions.
 
@@ -73,3 +73,11 @@ Update MMSM to a build supporting launcher connections (currently the Experiment
 Tokens are single-use and expire after ten minutes. MML stores its 30-day connection credential using Windows encryption and shares an isolated browser session with its Servers tab. Disconnect in MML or revoke the connection from your MMSM profile to invalidate its sessions. Changing the MMSM password also revokes launcher connections. Username capitalization and existing server permissions are preserved. This connection is separate from future Microsoft/Minecraft sign-in. **Continue locally** keeps discovery and profile planning available without an account.
 
 For the full local integration check, clone MMSM into `.integrations/MMSM` (or set `MMSM_SOURCE`) and run `pnpm test:account`. Set `MML_PYTHON` to a Python executable with MMSM dependencies installed. This uses a temporary MMSM instance to check real Electron encryption, login persistence, embedded account identity, token replay rejection, and revocation.
+
+## Install and update
+
+Download the EXE from the latest Stable GitHub release, run it, and start MML from its desktop shortcut or Start menu entry. The installed application checks for updates on startup. Open the bottom-left Settings gear to check again, download an update with progress, and restart to install. Downloads are checked against the published SHA-512 checksum. Local profiles and MMSM connections remain in your Windows app data directory.
+
+**Stable** is selected by default and reads only GitHub’s latest published stable release. **Experimental** is opt-in and reads the latest successfully built push to `main`; failed or unfinished builds are never offered. Returning to Stable can replace a newer experimental build with the latest stable release. Normal pushes publish only the experimental prerelease; changing `release-request.json` to match the package version explicitly requests a stable release.
+
+`pnpm test:updates` exercises the actual updater against both published feeds and verifies installer downloads without installing them. Source-development and browser-preview runs do not install updates.

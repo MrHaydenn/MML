@@ -1,5 +1,5 @@
 const BASE = 'https://api.modrinth.com/v2';
-const USER_AGENT = 'MrHaydenn/MML/0.2.0 (https://github.com/MrHaydenn/MML)';
+const USER_AGENT = 'MrHaydenn/MML/0.3.0 (https://github.com/MrHaydenn/MML)';
 const LOADERS = ['fabric', 'forge', 'neoforge', 'quilt'];
 
 function searchParams(input = {}) {

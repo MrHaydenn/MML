@@ -1,6 +1,6 @@
 {
   "name": "mml",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MrHaydenn's Minecraft Launcher — a Windows modpack workspace",
   "author": "MrHaydenn",
   "private": true,
@@ -13,7 +13,8 @@
     "test:account": "electron scripts/check-account.cjs",
     "dist": "electron-builder --win nsis --x64 --publish never",
     "pack": "electron-builder --win --dir --x64 --publish never",
-    "preview": "node scripts/preview.cjs"
+    "preview": "node scripts/preview.cjs",
+    "test:updates": "electron scripts/check-updates.cjs"
   },
   "build": {
     "appId": "com.mrhaydenn.mml",
@@ -37,10 +38,18 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true
     },
-    "publish": null
+    "publish": {
+      "url": "https://github.com/MrHaydenn/MML/releases/latest/download",
+      "provider": "generic",
+      "channel": "latest"
+    },
+    "artifactName": "MML-Setup-${version}.${ext}"
   },
   "devDependencies": {
     "electron": "^44.6.0",
     "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

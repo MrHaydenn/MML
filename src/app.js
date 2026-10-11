@@ -260,3 +260,32 @@ document.addEventListener('keydown', event => { if (event.ctrlKey && event.key.t
 api.library().then(profiles => { state.profiles = profiles; renderLibrary(); }).catch(error => toast(error.message));
 loadVersions(); search();
 restoreAccount();
+
+function renderUpdate(status) {
+  $('#app-version').textContent = status.current || '0.3.0';
+  $('#update-current').textContent = `Installed: MML ${status.current || '0.3.0'}`;
+  $('#update-channel').value = status.channel;
+  $('#update-status').textContent = status.message;
+  const working = ['checking', 'downloading'].includes(status.status);
+  $('#update-channel').disabled = working || status.status === 'ready' || !window.mml;
+  $('#update-check').disabled = working || status.status === 'ready' || !window.mml;
+  $('#update-download').hidden = status.status !== 'available';
+  $('#update-install').hidden = status.status !== 'ready';
+  $('#update-progress').hidden = status.status !== 'downloading';
+  $('#update-progress').value = status.progress || 0;
+}
+async function updateAction(action) {
+  try { const status = await action(); if (status) renderUpdate(status); }
+  catch (error) { $('#update-status').textContent = error.message; }
+}
+$('#update-channel').onchange = () => updateAction(async () => { await window.mml.updateChannel($('#update-channel').value); return window.mml.checkUpdates(); });
+$('#update-check').onclick = () => updateAction(() => window.mml.checkUpdates());
+$('#update-download').onclick = () => updateAction(() => window.mml.downloadUpdate());
+$('#update-install').onclick = () => updateAction(() => window.mml.installUpdate());
+if (window.mml) {
+  window.mml.onUpdateStatus(status => {
+    renderUpdate(status);
+    if (status.status === 'available') toast(`MML ${status.latest} is available. Open Settings to update.`);
+  });
+  updateAction(() => window.mml.updateState());
+} else renderUpdate({ channel: 'stable', current: '0.3.0', status: 'development', message: 'Install the Windows application to check for and install updates.' });

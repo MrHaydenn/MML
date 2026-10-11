@@ -6,6 +6,8 @@ const { createClient } = require('./modrinth.cjs');
 const { createLibrary } = require('./library.cjs');
 const { createHosting } = require('./hosting.cjs');
 const { createAccount } = require('./account.cjs');
+const { createUpdater } = require('./updater.cjs');
+const { autoUpdater } = require('electron-updater');
 const page = path.join(__dirname, '../src/index.html');
 let window;
 
@@ -40,6 +42,17 @@ app.whenReady().then(() => {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
+  const updater = createUpdater({ engine: autoUpdater, directory: app.getPath('userData'), version: app.getVersion(), packaged: app.isPackaged,
+    notify: status => { if (!window.isDestroyed()) window.webContents.send('updates:status', status); } });
+  const updateReady = updater.initialize();
+  handle('updates:state', async () => { await updateReady; return updater.state(); });
+  handle('updates:channel', async value => { await updateReady; return updater.channel(value); });
+  handle('updates:check', async () => { await updateReady; return updater.check(); });
+  handle('updates:download', () => updater.download());
+  handle('updates:install', () => updater.install());
+  window.webContents.once('did-finish-load', () => {
+    updateReady.then(() => updater.check()).catch(() => {});
+  });
   const hosting = createHosting(window, { WebContentsView, shell });
   const account = createAccount({ directory: app.getPath('userData'), safeStorage, sessionFor: partition => session.fromPartition(partition) });
   const configureHosting = () => {

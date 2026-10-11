@@ -23,5 +23,15 @@ contextBridge.exposeInMainWorld('mml', {
     return () => ipcRenderer.removeListener('hosting:status', listener);
   },
   windowAction: action => ipcRenderer.send('window:action', action),
+  updateState: () => ipcRenderer.invoke('updates:state'),
+  updateChannel: value => ipcRenderer.invoke('updates:channel', value),
+  checkUpdates: () => ipcRenderer.invoke('updates:check'),
+  downloadUpdate: () => ipcRenderer.invoke('updates:download'),
+  installUpdate: () => ipcRenderer.invoke('updates:install'),
+  onUpdateStatus: callback => {
+    const listener = (_event, status) => callback(status);
+    ipcRenderer.on('updates:status', listener);
+    return () => ipcRenderer.removeListener('updates:status', listener);
+  },
   platform: 'windows'
 });
