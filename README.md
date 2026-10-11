@@ -1,6 +1,6 @@
 # MrHaydenn's Minecraft Launcher (MML)
 
-A Windows-first Minecraft modpack workspace. **Working title · 0.1.1 UI preview.**
+A Windows-first Minecraft modpack workspace. **Working title · 0.2.0 UI preview.**
 
 An original charcoal, olive, and amber interface with a familiar launcher structure: discovery, your library, and profile creation.
 
@@ -12,7 +12,7 @@ An original charcoal, olive, and amber interface with a familiar launcher struct
 - Create and remove local planning profiles, including profiles inspired by a Modrinth pack.
 - Persistent local library, explicit loading/error/empty states, and native window controls.
 - Windows x64 installer and CI build configuration.
-- **Host Server** sidebar tab opens [MMSM](https://mmsm.mrhaydenn.us/) inside the Windows launcher, with reload and an external-browser fallback.
+- Connect an MMSM account with an instance URL and one-use token. The **Servers** tab opens that instance already signed in with the account's existing permissions.
 
 **This milestone does not install modpacks or launch Minecraft.** Profiles are planning records, not installed instances. Microsoft authentication, Java management, loader installation, `.mrpack` import/export, content downloads and game launch are future milestones. Browsing public Modrinth content does not require an API key.
 
@@ -36,7 +36,7 @@ pnpm pack       # Unpacked Windows application in release/win-unpacked
 pnpm dist       # Windows x64 NSIS installer in release/
 ```
 
-The installer is unsigned during development. No certificate or automatic update service is configured. The browser preview uses a separate `.preview-data` library. Its Host Server tab opens MMSM in a browser tab; the desktop app embeds it.
+The installer is unsigned during development. No certificate or automatic update service is configured. The browser preview uses a separate `.preview-data` library. Account pairing is available in the desktop application. The browser preview does not submit or store connection tokens.
 
 MMSM uses an isolated Electron `WebContentsView` with its own persistent browser session. The page has no launcher preload bridge or Node access. The launcher loads only the MMSM origin in the embedded view; other HTTP(S) links open in the system browser. Loading failures provide retry and browser fallback controls. Site response headers remain intact, including its iframe restrictions.
 
@@ -65,3 +65,11 @@ Desktop profiles are stored under Electron's Windows user data directory, normal
 - [Electron security guidance](https://www.electronjs.org/docs/latest/tutorial/security/)
 
 MML is independent of Modrinth, Mojang, and Microsoft. Project names, icons, and screenshots loaded from Modrinth belong to their respective creators. No Modrinth app source code or branding assets are included.
+
+## Connect MMSM
+
+Update MMSM to a build supporting launcher connections (currently the Experimental channel). In your normal browser, sign into MMSM, click your profile, open **Launcher connections**, and generate a token. In MML, enter the public HTTPS instance URL and token. Localhost may use HTTP for development.
+
+Tokens are single-use and expire after ten minutes. MML stores its 30-day connection credential using Windows encryption and shares an isolated browser session with its Servers tab. Disconnect in MML or revoke the connection from your MMSM profile to invalidate its sessions. Changing the MMSM password also revokes launcher connections. Username capitalization and existing server permissions are preserved. This connection is separate from future Microsoft/Minecraft sign-in. **Continue locally** keeps discovery and profile planning available without an account.
+
+For the full local integration check, clone MMSM into `.integrations/MMSM` (or set `MMSM_SOURCE`) and run `pnpm test:account`. Set `MML_PYTHON` to a Python executable with MMSM dependencies installed. This uses a temporary MMSM instance to check real Electron encryption, login persistence, embedded account identity, token replay rejection, and revocation.

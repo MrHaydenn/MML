@@ -5,6 +5,7 @@ const compact = number => new Intl.NumberFormat('en', { notation: 'compact', max
 const labels = { modpack: 'Modpack', mod: 'Mod', resourcepack: 'Resource pack', shader: 'Shader' };
 const state = { type: 'modpack', offset: 0, total: 0, request: 0, details: 0, profiles: [], versions: [], source: null, page: 'discover' };
 let toastTimer, searchTimer;
+let account = { connected: false };
 // The browser preview uses the same backend modules through a loopback development server.
 const api = window.mml || Object.fromEntries(['search', 'project', 'versions', 'gameVersions', 'library', 'createProfile', 'removeProfile', 'openLibrary', 'openProject'].map(method => [method, async value => {
   const response = await fetch(`/api/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) });
@@ -28,12 +29,12 @@ function showPage(page) {
   state.page = page;
   for (const name of ['discover', 'library', 'hosting', 'settings']) $(`#${name}-page`).hidden = page !== name;
   $$('[data-page]').forEach(button => button.classList.toggle('active', button.dataset.page === page));
-  $('#breadcrumb').textContent = `Workspace / ${page === 'library' ? 'My library' : page === 'hosting' ? 'Host Server' : page === 'settings' ? 'Settings & about' : 'Discover'}`;
+  $('#breadcrumb').textContent = `Workspace / ${page === 'library' ? 'My library' : page === 'hosting' ? 'Servers' : page === 'settings' ? 'Settings & about' : 'Discover'}`;
   if (page === 'library') renderLibrary();
   window.scrollTo({ top: 0 });
   updateHostingLayout();
   if (page === 'hosting') {
-    if (window.mml) window.mml.showHosting().then(renderHostingStatus).catch(error => renderHostingStatus({ state: 'error', message: error.message }));
+    if (window.mml) window.mml.showHosting().then(renderHostingStatus).catch(hostingError);
     else renderHostingStatus({ state: 'preview' });
   }
 }
@@ -41,27 +42,97 @@ function showPage(page) {
 function updateHostingLayout() {
   if (!window.mml) return;
   const rect = $('#hosting-viewport').getBoundingClientRect();
-  window.mml.setHostingLayout({ visible: state.page === 'hosting' && !document.querySelector('dialog[open]'), bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
+  window.mml.setHostingLayout({ visible: state.page === 'hosting' && !document.body.classList.contains('signing-in') && !document.querySelector('dialog[open]'), bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
 }
 
 function renderHostingStatus(status) {
-  const titles = { idle: 'Your server workspace', loading: 'Connecting to MMSM…', ready: 'MMSM is ready', error: 'Could not connect to MMSM', preview: 'Continue to MMSM' };
-  $('#hosting-status').textContent = { idle: 'Ready to connect', loading: 'Connecting…', ready: 'Connected', error: 'Connection unavailable', preview: 'Browser preview' }[status.state] || '';
+  const titles = { idle: 'Your server workspace', loading: 'Connecting to MMSM…', ready: 'MMSM is ready', error: 'Could not connect to MMSM', preview: 'Connect from the Windows app', disconnected: 'Bring your servers into MML' };
+  $('#hosting-status').textContent = { idle: 'Ready to connect', loading: 'Connecting…', ready: 'Connected', error: 'Connection unavailable', preview: 'Browser preview', disconnected: 'Account connection needed' }[status.state] || '';
   $('#hosting-placeholder').hidden = status.state === 'ready';
   $('#hosting-message-title').textContent = titles[status.state] || titles.idle;
-  $('#hosting-message').textContent = status.message || (status.state === 'preview' ? 'MMSM opens inside the Windows launcher. Use Open in browser to visit it from this preview.' : 'Your server manager will appear here. You can also open it in your browser.');
+  $('#hosting-message').textContent = status.message || (['preview', 'disconnected'].includes(status.state) ? 'Connect your MMSM instance with a token from your profile. The Windows app opens your server manager already signed in.' : 'Your server manager will appear here. You can also open it in your browser.');
   $('#hosting-retry').hidden = status.state !== 'error';
   updateHostingLayout();
 }
 
 function reloadHosting() {
   if (!window.mml) return toast('The embedded server manager is available in the Windows launcher.');
-  window.mml.reloadHosting().then(renderHostingStatus).catch(error => renderHostingStatus({ state: 'error', message: error.message }));
+  window.mml.reloadHosting().then(renderHostingStatus).catch(hostingError);
+}
+
+async function hostingError(error) {
+  renderHostingStatus({ state: 'error', message: error.message });
+  if (window.mml) renderAccount(await window.mml.accountState());
+}
+
+function renderAccount(value) {
+  account = value;
+  $('#account-name').textContent = value.connected ? value.user.username : 'Local workspace';
+  $('#account-avatar').textContent = value.connected ? value.user.username.charAt(0).toUpperCase() : 'M';
+  $('#account-instance').textContent = value.connected ? new URL(value.instanceUrl).host : 'Connect an MMSM account';
+  $('#hosting-origin').textContent = value.connected ? new URL(value.instanceUrl).host : 'No MMSM instance connected';
+  $('#hosting-account').textContent = value.connected ? `Signed in as ${value.user.username} · ${value.user.role}` : 'Your MMSM server workspace';
+  $('#hosting-connect').hidden = value.connected;
+  $('#hosting-external').disabled = !value.connected;
+  $('#hosting-reload').disabled = !value.connected;
+}
+
+function enterWorkspace() {
+  $('#signin-screen').hidden = true; document.body.classList.remove('signing-in'); updateHostingLayout();
+}
+
+function showSignin() {
+  $('#signin-error').textContent = ''; $('#instance-token').value = '';
+  $('#signin-screen').hidden = false; document.body.classList.add('signing-in'); updateHostingLayout(); $('#instance-url').focus();
+}
+
+$('#continue-local').onclick = enterWorkspace;
+$('#hosting-connect').onclick = showSignin;
+$('#account-menu').onclick = () => {
+  if (!account.connected) return showSignin();
+  $('#signed-in-name').textContent = account.user.username;
+  $('#signed-in-instance').textContent = account.instanceUrl;
+  $('#account-error').textContent = '';
+  $('#account-dialog').showModal();
+};
+$('#disconnect-account').onclick = async () => {
+  $('#disconnect-account').disabled = true; $('#account-error').textContent = '';
+  try {
+    renderAccount(await window.mml.disconnectAccount()); $('#account-dialog').close();
+    if (state.page === 'hosting') renderHostingStatus({ state: 'disconnected' });
+    toast('MML disconnected. Your local library is still here.');
+  } catch (error) { $('#account-error').textContent = error.message; }
+  finally { $('#disconnect-account').disabled = false; }
+};
+$('#signin-form').onsubmit = async event => {
+  event.preventDefault(); $('#signin-error').textContent = '';
+  if (!window.mml) { $('#instance-token').value = ''; $('#signin-error').textContent = 'Account connections are available in the Windows app. This preview does not send or save tokens.'; return; }
+  $('#signin-submit').disabled = true;
+  const token = $('#instance-token').value; $('#instance-token').value = '';
+  try {
+    renderAccount(await window.mml.connectAccount({ instanceUrl: $('#instance-url').value, token }));
+    enterWorkspace(); showPage('hosting'); toast(`Welcome, ${account.user.username}.`);
+  } catch (error) { $('#signin-error').textContent = error.message; }
+  finally { $('#signin-submit').disabled = false; }
+};
+
+async function restoreAccount() {
+  renderAccount(account);
+  if (!window.mml) return;
+  $('#signin-submit').disabled = true;
+  try {
+    renderAccount(await window.mml.restoreAccount());
+    if (account.connected) enterWorkspace();
+  } catch (error) {
+    renderAccount(await window.mml.accountState());
+    if (account.connected) { enterWorkspace(); toast(error.message); }
+    else $('#signin-error').textContent = error.message;
+  } finally { $('#signin-submit').disabled = false; }
 }
 
 $('#hosting-external').onclick = () => {
   if (window.mml) window.mml.openHosting().catch(error => toast(error.message));
-  else window.open('https://mmsm.mrhaydenn.us/', '_blank', 'noopener,noreferrer');
+  else if (account.connected) window.open(account.instanceUrl, '_blank', 'noopener,noreferrer');
 };
 $('#hosting-reload').onclick = reloadHosting;
 $('#hosting-retry').onclick = reloadHosting;
@@ -188,3 +259,4 @@ $('#open-library').onclick = () => api.openLibrary().catch(error => toast(error.
 document.addEventListener('keydown', event => { if (event.ctrlKey && event.key.toLowerCase() === 'k' && !document.querySelector('dialog[open]')) { event.preventDefault(); showPage('discover'); $('#search').focus(); } });
 api.library().then(profiles => { state.profiles = profiles; renderLibrary(); }).catch(error => toast(error.message));
 loadVersions(); search();
+restoreAccount();

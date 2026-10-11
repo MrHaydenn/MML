@@ -1,12 +1,14 @@
 const HOST_URL = 'https://mmsm.mrhaydenn.us/';
 
-function isHostUrl(value) {
-  try { return new URL(value).origin === new URL(HOST_URL).origin; }
+function isHostUrl(value, origin = HOST_URL) {
+  try { return new URL(value).origin === new URL(origin).origin; }
   catch { return false; }
 }
 
 function createHosting(window, { WebContentsView, shell }) {
   let view;
+  let instance = HOST_URL;
+  let partition = 'persist:mml-hosting';
   let layout = { visible: false };
   let status = { state: 'idle' };
   let timeout;
@@ -36,7 +38,7 @@ function createHosting(window, { WebContentsView, shell }) {
     // changing their response headers or granting access to the launcher bridge.
     view = new WebContentsView({ webPreferences: {
       contextIsolation: true, nodeIntegration: false, sandbox: true,
-      partition: 'persist:mml-hosting'
+      partition
     } });
     view.setBackgroundColor('#111313');
     view.setVisible(false);
@@ -45,7 +47,7 @@ function createHosting(window, { WebContentsView, shell }) {
     view.webContents.session.setPermissionCheckHandler(() => false);
     view.webContents.setWindowOpenHandler(({ url }) => { external(url); return { action: 'deny' }; });
     for (const event of ['will-navigate', 'will-redirect']) view.webContents.on(event, (event, url) => {
-      if (!isHostUrl(url)) { event.preventDefault(); external(url); }
+      if (!isHostUrl(url, instance)) { event.preventDefault(); external(url); }
     });
     view.webContents.on('did-start-loading', () => {
       clearTimeout(timeout);
@@ -68,7 +70,17 @@ function createHosting(window, { WebContentsView, shell }) {
   }
   function load() {
     ensureView();
-    view.webContents.loadURL(HOST_URL).catch(() => {}); // did-fail-load supplies the user-facing error.
+    view.webContents.loadURL(instance).catch(() => {}); // did-fail-load supplies the user-facing error.
+  }
+  function reset() {
+    clearTimeout(timeout);
+    if (view) {
+      window.contentView.removeChildView(view);
+      view.webContents.removeAllListeners();
+      if (!view.webContents.isDestroyed()) view.webContents.close();
+      view = null;
+    }
+    notify({ state: 'idle' });
   }
   window.on('resize', display);
   window.on('closed', () => {
@@ -77,9 +89,11 @@ function createHosting(window, { WebContentsView, shell }) {
   });
   return {
     status: () => status,
+    reset,
+    configure: (url, sessionPartition) => { reset(); instance = url; partition = sessionPartition; },
     show: () => { if (status.state === 'idle') load(); return status; },
     reload: () => { load(); return status; },
-    openExternal: () => shell.openExternal(HOST_URL),
+    openExternal: () => shell.openExternal(instance),
     setLayout: input => {
       const bounds = input?.bounds;
       if (input?.visible && (!bounds || !['x', 'y', 'width', 'height'].every(key => Number.isFinite(bounds[key])))) throw new Error('Invalid hosting layout');

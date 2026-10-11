@@ -1,4 +1,5 @@
 node_modules/
+.integrations/
 release/
 .preview-data/
 test-results/

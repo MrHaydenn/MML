@@ -1,10 +1,11 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, shell, safeStorage, session } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
 const { createClient } = require('./modrinth.cjs');
 const { createLibrary } = require('./library.cjs');
 const { createHosting } = require('./hosting.cjs');
+const { createAccount } = require('./account.cjs');
 const page = path.join(__dirname, '../src/index.html');
 let window;
 
@@ -40,8 +41,26 @@ app.whenReady().then(() => {
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   const hosting = createHosting(window, { WebContentsView, shell });
-  handle('hosting:show', () => hosting.show());
-  handle('hosting:reload', () => hosting.reload());
+  const account = createAccount({ directory: app.getPath('userData'), safeStorage, sessionFor: partition => session.fromPartition(partition) });
+  const configureHosting = () => {
+    const current = account.current();
+    if (current.connected) hosting.configure(current.instanceUrl, account.partition());
+    else hosting.reset();
+    return current;
+  };
+  handle('account:restore', async () => { await account.restore(); return configureHosting(); });
+  handle('account:state', () => account.current());
+  handle('account:connect', async input => { await account.connect(input); return configureHosting(); });
+  handle('account:disconnect', async () => { hosting.reset(); await account.disconnect(); return configureHosting(); });
+  const showHosting = async () => {
+    if (!account.current().connected) return { state: 'disconnected' };
+    hosting.reset();
+    try { await account.refresh(); }
+    finally { configureHosting(); }
+    return hosting.show();
+  };
+  handle('hosting:show', showHosting);
+  handle('hosting:reload', showHosting);
   handle('hosting:openExternal', () => hosting.openExternal());
   ipcMain.on('hosting:layout', (event, input) => {
     if (!trusted(event)) return;

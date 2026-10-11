@@ -1,6 +1,6 @@
 {
   "name": "mml",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "MrHaydenn's Minecraft Launcher — a Windows modpack workspace",
   "author": "MrHaydenn",
   "private": true,
@@ -10,6 +10,7 @@
     "test": "node --test tests/*.test.cjs",
     "test:live": "node scripts/check-api.cjs",
     "test:hosting": "electron scripts/check-hosting.cjs",
+    "test:account": "electron scripts/check-account.cjs",
     "dist": "electron-builder --win nsis --x64 --publish never",
     "pack": "electron-builder --win --dir --x64 --publish never",
     "preview": "node scripts/preview.cjs"
