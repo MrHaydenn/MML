@@ -1,6 +1,6 @@
 {
   "name": "mml",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "MrHaydenn's Minecraft Launcher — a Windows modpack workspace",
   "author": "MrHaydenn",
   "private": true,
@@ -9,6 +9,7 @@
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",
     "test:live": "node scripts/check-api.cjs",
+    "test:install": "node scripts/check-install.cjs",
     "test:hosting": "electron scripts/check-hosting.cjs",
     "test:account": "electron scripts/check-account.cjs",
     "dist": "electron-builder --win nsis --x64 --publish never",
@@ -47,9 +48,13 @@
   },
   "devDependencies": {
     "electron": "^44.6.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "jsdom": "^30.1.2"
   },
   "dependencies": {
-    "electron-updater": "^6.8.9"
+    "dompurify": "^3.4.16",
+    "electron-updater": "^6.8.9",
+    "marked": "^18.1.0",
+    "yauzl": "^3.4.0"
   }
 }

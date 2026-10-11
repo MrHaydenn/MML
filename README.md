@@ -1,6 +1,6 @@
 # MrHaydenn's Minecraft Launcher (MML)
 
-A Windows-first Minecraft modpack workspace. **Working title · 0.3.0 UI preview.**
+A Windows-first Minecraft modpack workspace. **Working title · 0.4.0 discovery and installation preview.**
 
 An original charcoal, olive, and amber interface with a familiar launcher structure: discovery, your library, and profile creation.
 
@@ -9,12 +9,16 @@ An original charcoal, olive, and amber interface with a familiar launcher struct
 - Live Modrinth API v2 discovery for modpacks, mods, resource packs, and shaders.
 - Debounced search, loader and Minecraft version filters, sorting, and pagination.
 - Project details, recent releases, and links to the original Modrinth project.
-- Create and remove local planning profiles, including profiles inspired by a Modrinth pack.
+- Install mods, resource packs and shaders into chosen instances, with compatible version selection, explicit warnings and required dependencies.
+- Install `.mrpack` packs into separate instances with verified downloads and client overrides.
+- Review installed content and reverse dependencies.
+- Multiple Minecraft accounts through Microsoft device-code sign-in and encrypted credentials.
+- Default Vanilla instance automatically tracks the latest release.
 - Persistent local library, explicit loading/error/empty states, and native window controls.
 - Windows x64 installer and CI build configuration.
 - Connect an MMSM account with an instance URL and one-use token. The **Servers** tab opens that instance already signed in with the account's existing permissions.
 
-**This milestone does not install modpacks or launch Minecraft.** Profiles are planning records, not installed instances. Microsoft authentication, Java management, loader installation, `.mrpack` import/export, content downloads and game launch are future milestones. Browsing public Modrinth content does not require an API key.
+**This milestone installs content, but does not launch Minecraft yet.** Java management, loader binaries, game launch and pack export are future milestones. The Latest Minecraft Vanilla instance follows release metadata on startup; it does not download the game runtime yet. Browsing public Modrinth content does not require an API key.
 
 ## Develop on Windows
 
@@ -81,3 +85,10 @@ Download the EXE from the latest Stable GitHub release, run it, and start MML fr
 **Stable** is selected by default and reads only GitHub’s latest published stable release. **Experimental** is opt-in and reads the latest successfully built push to `main`; failed or unfinished builds are never offered. Returning to Stable can replace a newer experimental build with the latest stable release. Normal pushes publish only the experimental prerelease; changing `release-request.json` to match the package version explicitly requests a stable release.
 
 `pnpm test:updates` exercises the actual updater against both published feeds and verifies installer downloads without installing them. Source-development and browser-preview runs do not install updates.
+## Minecraft accounts and content
+
+Open Accounts from the bottom-left Minecraft button. Enter MML's approved public Microsoft client ID in the registration section, or set `MML_MICROSOFT_CLIENT_ID`. Packaged distributions can set `microsoftClientId` in package.json. Never enter a client secret. Sign-in checks Xbox authentication and Minecraft Java ownership and encrypts refresh tokens using Electron safeStorage. Live sign-in requires approved Minecraft/Xbox access.
+
+Popular discovery uses total downloads because Modrinth does not expose weekly rankings. Mods, resource packs and shaders use list rows; modpacks keep large cards. Downloads are hash-verified and staged before replacing instances. Unsupported and optional client pack files are skipped. Unsupported download hosts fail with an explanation.
+
+`pnpm test:install` verifies a real mod with dependencies and a full pack in disposable storage.

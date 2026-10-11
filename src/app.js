@@ -27,10 +27,11 @@ function toast(message) {
 }
 function showPage(page) {
   state.page = page;
-  for (const name of ['discover', 'library', 'hosting', 'settings']) $(`#${name}-page`).hidden = page !== name;
+  for (const name of ['discover', 'library', 'hosting', 'settings', 'project', 'accounts']) $(`#${name}-page`).hidden = page !== name;
   $$('[data-page]').forEach(button => button.classList.toggle('active', button.dataset.page === page));
   $('#breadcrumb').textContent = `Workspace / ${page === 'library' ? 'My library' : page === 'hosting' ? 'Servers' : page === 'settings' ? 'Settings & about' : 'Discover'}`;
   if (page === 'library') renderLibrary();
+  if (page === 'accounts') loadMinecraftAccounts();
   window.scrollTo({ top: 0 });
   updateHostingLayout();
   if (page === 'hosting') {
@@ -144,63 +145,11 @@ if (window.mml) {
   window.addEventListener('scroll', updateHostingLayout, { passive: true });
 }
 
-async function search() {
-  const request = ++state.request;
-  $('#results').innerHTML = Array.from({ length: 6 }, () => '<div class="skeleton" aria-hidden="true"></div>').join('');
-  $('#results-label').textContent = 'Searching the Modrinth community…';
-  $('#previous').disabled = true; $('#next').disabled = true;
-  try {
-    const data = await api.search({ type: state.type, query: $('#search').value, loader: $('#loader-filter').value, version: $('#version-filter').value, sort: $('#sort').value, offset: state.offset });
-    if (request !== state.request) return;
-    state.total = data.total_hits;
-    $('#connection').textContent = 'Modrinth connected'; $('#connection').classList.remove('offline');
-    $('#results-label').textContent = `${data.total_hits.toLocaleString()} ${labels[state.type].toLowerCase()}${data.total_hits === 1 ? '' : 's'} to explore`;
-    $('#results').innerHTML = data.hits.length ? data.hits.map(project => {
-      const cover = safeImage(project.featured_gallery || project.gallery?.[0]);
-      const tags = (project.display_categories || project.categories || []).filter(tag => !['minecraft'].includes(tag)).slice(0, 2).join(' · ');
-      return `<button class="project-card" data-project="${escapeHTML(project.project_id)}" aria-label="View ${escapeHTML(project.title)}"><div class="card-cover">${cover ? `<img src="${cover}" loading="lazy" alt="">` : `<div class="cover-placeholder">${escapeHTML(project.title.slice(0, 2).toUpperCase())}</div>`}<span class="type-badge">${labels[state.type]}</span></div><div class="card-body"><div class="card-title">${icon(project)}<div><h3>${escapeHTML(project.title)}</h3><span class="card-author">by ${escapeHTML(project.author)}</span></div></div><p class="card-description">${escapeHTML(project.description)}</p><div class="card-meta"><span>↓ <b>${compact(project.downloads)}</b></span><span class="tags">${escapeHTML(tags)}</span><span>↗</span></div></div></button>`;
-    }).join('') : '<div class="empty-state"><span class="empty-symbol">⌕</span><h2>No worlds found. Yet.</h2><p>Try another search or clear a filter to find something new.</p></div>';
-    $('#previous').disabled = state.offset === 0; $('#next').disabled = state.offset + 12 >= state.total;
-    $('#page-label').textContent = `Page ${Math.floor(state.offset / 12) + 1}`;
-  } catch (error) {
-    if (request !== state.request) return;
-    $('#connection').textContent = 'Modrinth unavailable'; $('#connection').classList.add('offline');
-    $('#results-label').textContent = 'Could not load projects';
-    $('#results').innerHTML = `<div class="empty-state"><span class="empty-symbol">↻</span><h2>A small detour.</h2><p>${escapeHTML(error.message)}</p><button class="secondary" id="retry-search">Try again</button></div>`;
-    $('#retry-search').onclick = search;
-  }
-}
-
-async function showDetails(id) {
-  const request = ++state.details;
-  const dialog = $('#detail-dialog');
-  $('#detail-content').innerHTML = '<div class="dialog-heading"><h2>Loading project…</h2><button class="icon-button" id="close-detail" aria-label="Close">×</button></div><div class="skeleton"></div>';
-  $('#close-detail').onclick = () => dialog.close(); dialog.showModal();
-  try {
-    const [project, versions] = await Promise.all([api.project(id), api.versions(id)]);
-    if (request !== state.details || !dialog.open) return;
-    $('#detail-content').innerHTML = `<div class="dialog-heading"><span class="eyebrow muted">FROM THE MODRINTH COMMUNITY</span><button class="icon-button" id="close-detail" aria-label="Close">×</button></div><div class="detail-header">${icon(project)}<div><h2>${escapeHTML(project.title)}</h2><span class="card-author">${escapeHTML(labels[project.project_type] || project.project_type)} · ${escapeHTML(project.license?.id || 'See project license')}</span></div></div><p class="detail-description">${escapeHTML(project.description)}</p><div class="detail-stats"><span>↓ ${compact(project.downloads)} downloads</span><span>♡ ${compact(project.followers)} followers</span><span>${versions.length} versions</span></div><h2>Recent releases</h2><div class="version-list">${versions.slice(0, 5).map(version => `<div class="version-row"><div>${escapeHTML(version.name)}<small>${escapeHTML(version.game_versions.join(', '))} · ${escapeHTML(version.loaders.join(', '))}</small></div><span>${escapeHTML(version.version_type)}</span></div>`).join('') || '<p class="detail-notice">No published versions are available.</p>'}</div><p class="detail-notice">Create a local profile to plan this pack. Content installation and game launch are part of the next milestone.</p><div class="dialog-actions"><button id="open-project" class="secondary">View on Modrinth ↗</button>${project.project_type === 'modpack' ? '<button id="plan-project" class="primary">＋ Plan a profile</button>' : ''}</div>`;
-    $('#close-detail').onclick = () => dialog.close();
-    $('#open-project').onclick = () => api.openProject(project.id).catch(error => toast(error.message));
-    if ($('#plan-project')) $('#plan-project').onclick = () => { dialog.close(); openCreate(project, versions[0]); };
-  } catch (error) {
-    if (request !== state.details || !dialog.open) return;
-    $('#detail-content').innerHTML = `<div class="dialog-heading"><h2>Could not load project</h2><button class="icon-button" id="close-detail" aria-label="Close">×</button></div><p class="detail-description">${escapeHTML(error.message)}</p><button id="retry-detail" class="secondary">Try again</button>`;
-    $('#close-detail').onclick = () => dialog.close(); $('#retry-detail').onclick = () => { dialog.close(); showDetails(id); };
-  }
-}
-
-function renderLibrary() {
-  $('#library-count').textContent = state.profiles.length;
-  $('#library-list').innerHTML = state.profiles.length ? state.profiles.map(profile => `<article class="library-card"><div class="profile-monogram">${escapeHTML(profile.name.charAt(0).toUpperCase())}</div><h2>${escapeHTML(profile.name)}</h2><p>Minecraft ${escapeHTML(profile.gameVersion)} · ${escapeHTML(profile.loader)}<br>${profile.source ? `Inspired by ${escapeHTML(profile.source.title)}` : 'A fresh start, made by you.'}</p><div class="library-actions"><span class="status-pill">PLANNED PROFILE</span><button class="text-button" data-remove="${escapeHTML(profile.id)}">Remove</button></div></article>`).join('') : '<div class="empty-state"><span class="empty-symbol">▦</span><h2>Every great world starts somewhere.</h2><p>Create your first profile, or discover a community modpack to make your own.</p><button id="empty-create" class="primary">＋ Create a profile</button></div>';
-  if ($('#empty-create')) $('#empty-create').onclick = () => openCreate();
-}
-
 function openCreate(project = null, version = null) {
   state.source = project ? { id: project.id, title: project.title } : null;
   $('#create-form').reset(); $('#form-error').textContent = '';
   $('#profile-name').value = project?.title?.slice(0, 60) || '';
-  $('#profile-source').textContent = project ? `Inspired by ${project.title}. This creates a profile record; it does not download the pack.` : '';
+  $('#profile-source').textContent = project ? `Inspired by ${project.title}. Install the pack from its project page to download its content.` : '';
   const gameVersion = version?.game_versions?.at(-1);
   if (gameVersion) {
     if (![...$('#profile-version').options].some(o => o.value === gameVersion)) $('#profile-version').add(new Option(gameVersion, gameVersion));
@@ -237,18 +186,19 @@ for (const selector of ['#loader-filter', '#version-filter', '#sort']) $(selecto
 $('#reset-filters').onclick = () => { clearTimeout(searchTimer); $('#search').value = ''; $('#loader-filter').value = ''; $('#version-filter').value = ''; $('#sort').value = 'downloads'; state.offset = 0; search(); };
 $('#previous').onclick = () => { state.offset = Math.max(0, state.offset - 12); search(); };
 $('#next').onclick = () => { state.offset += 12; search(); };
-$('#results').onclick = event => { const card = event.target.closest('[data-project]'); if (card) showDetails(card.dataset.project); };
-for (const selector of ['#sidebar-create', '#hero-create', '#library-create']) $(selector).onclick = () => openCreate();
+$('#results').onclick = discoveryClick;
+for (const selector of ['#sidebar-create', '#library-create']) $(selector).onclick = () => openCreate();
 $$('.close-dialog').forEach(button => button.onclick = () => button.closest('dialog').close());
 $('#create-form').onsubmit = async event => {
   event.preventDefault(); $('#save-profile').disabled = true; $('#form-error').textContent = '';
   try {
     state.profiles = await api.createProfile({ name: $('#profile-name').value, gameVersion: $('#profile-version').value, loader: $('#profile-loader').value, source: state.source });
-    $('#create-dialog').close(); showPage('library'); toast('Profile created. Your next adventure has a home.');
+    $('#create-dialog').close(); showPage('library'); toast('Minecraft instance created.');
   } catch (error) { $('#form-error').textContent = error.message; }
   finally { $('#save-profile').disabled = false; }
 };
 $('#library-list').onclick = async event => {
+  const content = event.target.closest('[data-content]'); if (content) return showInstance(content.dataset.content);
   const button = event.target.closest('[data-remove]'); if (!button) return;
   if (button.dataset.confirm !== 'true') { button.dataset.confirm = 'true'; button.textContent = 'Confirm removal'; setTimeout(() => { button.dataset.confirm = ''; button.textContent = 'Remove'; }, 4000); return; }
   button.disabled = true;
@@ -262,8 +212,8 @@ loadVersions(); search();
 restoreAccount();
 
 function renderUpdate(status) {
-  $('#app-version').textContent = status.current || '0.3.0';
-  $('#update-current').textContent = `Installed: MML ${status.current || '0.3.0'}`;
+  $('#app-version').textContent = status.current || '0.4.0';
+  $('#update-current').textContent = `Installed: MML ${status.current || '0.4.0'}`;
   $('#update-channel').value = status.channel;
   $('#update-status').textContent = status.message;
   const working = ['checking', 'downloading'].includes(status.status);
@@ -288,4 +238,6 @@ if (window.mml) {
     if (status.status === 'available') toast(`MML ${status.latest} is available. Open Settings to update.`);
   });
   updateAction(() => window.mml.updateState());
-} else renderUpdate({ channel: 'stable', current: '0.3.0', status: 'development', message: 'Install the Windows application to check for and install updates.' });
+} else renderUpdate({ channel: 'stable', current: '0.4.0', status: 'development', message: 'Install the Windows application to check for and install updates.' });
+
+initializeDiscovery();

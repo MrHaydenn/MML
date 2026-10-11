@@ -1,5 +1,5 @@
 const BASE = 'https://api.modrinth.com/v2';
-const USER_AGENT = 'MrHaydenn/MML/0.3.0 (https://github.com/MrHaydenn/MML)';
+const USER_AGENT = 'MrHaydenn/MML/0.4.0 (https://github.com/MrHaydenn/MML)';
 const LOADERS = ['fabric', 'forge', 'neoforge', 'quilt'];
 
 function searchParams(input = {}) {
@@ -13,9 +13,9 @@ function searchParams(input = {}) {
 }
 
 function createClient(fetcher = fetch) {
-  async function request(path) {
+  async function request(path, body) {
     const response = await fetcher(`${BASE}${path}`, {
-      headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' }, signal: AbortSignal.timeout(15000)
+      headers: { 'User-Agent': USER_AGENT, Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) }, signal: AbortSignal.timeout(15000), ...(body ? { method: 'POST', body: JSON.stringify(body) } : {})
     });
     if (!response.ok) throw new Error(response.status === 429 ? 'Modrinth is busy. Please wait a minute and try again.' : `Modrinth request failed (${response.status}). Please try again.`);
     return response.json();
@@ -28,6 +28,8 @@ function createClient(fetcher = fetch) {
     search: input => request(`/search?${searchParams(input)}`),
     project: value => request(`/project/${id(value)}`),
     versions: value => request(`/project/${id(value)}/version`),
+    version: value => request(`/version/${id(value)}`),
+    versionFiles: hashes => request('/version_files', { hashes, algorithm: 'sha1' }),
     gameVersions: async () => (await request('/tag/game_version')).filter(v => v.version_type === 'release').map(v => v.version)
   };
 }

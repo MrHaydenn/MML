@@ -25,7 +25,7 @@ function createLibrary(directory) {
   }
   function mutate(operation) {
     const next = queue.then(async () => {
-      const profiles = operation(await list());
+      const profiles = await operation(await list());
       await fs.mkdir(directory, { recursive: true });
       await fs.writeFile(`${file}.tmp`, JSON.stringify(profiles, null, 2));
       await fs.rename(`${file}.tmp`, file);
@@ -38,6 +38,14 @@ function createLibrary(directory) {
     list,
     create: input => { const profile = validateProfile(input); return mutate(profiles => [{ ...profile, id: randomUUID(), createdAt: new Date().toISOString() }, ...profiles]); },
     remove: id => mutate(profiles => profiles.filter(p => p.id !== id)),
+    ensureDefault: version => mutate(profiles => {
+      if (!/^\d+\.\d+(\.\d+)?$/.test(version)) throw new Error('Invalid latest Minecraft release.');
+      const current = profiles.find(p => p.id === 'default-vanilla');
+      if (current) { current.gameVersion = version; current.loader = 'vanilla'; current.autoUpdate = true; }
+      else profiles.unshift({ id: 'default-vanilla', name: 'Latest Minecraft', gameVersion: version, loader: 'vanilla', autoUpdate: true, createdAt: new Date().toISOString() });
+      return profiles;
+    }),
+    add: profile => mutate(profiles => [...profiles, profile]),
     directory
   };
 }
