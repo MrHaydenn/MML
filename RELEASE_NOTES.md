@@ -1,11 +1,11 @@
-# MML 0.3.0
+# MML 0.4.0
 
-First published Windows installer with in-launcher updates.
+Sign into your MML workspace with your existing Haydenn Accounts username and password at accounts.mrhaydenn.us. The sign-in screen no longer asks for an MMSM URL, service URL or pairing token, and does not offer account registration.
 
-- Stable updates use published GitHub releases by default.
-- Opt into Experimental in Settings for the latest verified push to main.
-- Updates download with progress and checksum verification, then install on restart.
-- MMSM account pairing and a signed-in embedded Servers workspace.
-- Modrinth discovery and local profile planning.
+This release also includes project overview and version pages, large modpack cards and list views for other content, compatible content installation with warnings, required dependencies and reverse dependency tracking, Modrinth pack installation, a latest-release Vanilla profile, and multiple Minecraft account support.
 
-Download and run MML-Setup-0.3.0.exe. After installation, launch MML from the Start menu or desktop shortcut. Existing profiles and MMSM connections are preserved during updates. This development installer is unsigned. Pack installation and Minecraft game launch are still future milestones.
+Microsoft/Minecraft authentication remains separate from your Haydenn Accounts login and requires the launcher application's Minecraft API approval. Java management, loader binaries and launching the game remain future work.
+
+Validation: 31 automated tests passed; Windows installer built successfully. The prior milestone also verified real Modrinth mod/dependency and pack downloads.
+
+Download and run MML-Setup-0.4.0.exe to update without signing into the launcher. The development installer is unsigned.
