@@ -4,9 +4,9 @@ The account server is a separate **Haydenn Accounts** project deployed on your W
 MML signs into accounts.mrhaydenn.us with an existing Haydenn Accounts username and password.
 Minecraft accounts are connected separately through Microsoft.
 
-A Windows-first Minecraft modpack workspace. **Working title · 0.7.0 instance and game-launch preview.**
+A Windows-first Minecraft modpack workspace. **Working title · 0.8.0 instance and game-launch preview.**
 
-An original charcoal, olive, and amber interface with a familiar launcher structure: discovery, your library, and profile creation.
+An original charcoal and grey interface with bright green highlights with a familiar launcher structure: discovery, your library, and profile creation.
 
 ## What works
 
@@ -109,3 +109,9 @@ Apply sends the saved PNG to Minecraft Services using the selected account’s i
 ## Seamless Windows updates
 
 Updates download and verify in the background for the selected channel. Restart to update appears in the title bar when ready and uses silent installation, then reopens MML. Closing MML also installs a downloaded update for the next launch. New installations are per-user and do not offer all-users or elevated installation. A legacy all-users installation or Windows security policy can still require approval during migration; first installation remains unsigned. MML 0.6 and older use their existing interactive update flow once to obtain this version.
+
+## Skin selector and compact workspace
+
+MML 0.8 uses a 76-pixel icon rail with accessible names, hover labels and shortcuts for active library instances. Archived instances stay in Library and do not take up the rail. The Minecraft account and Haydenn account controls remain separate at the bottom; the Settings icon tooltip includes the app version. Discover starts directly with content tabs and search, retaining a compact target label when adding content to an instance.
+
+The skin selector shows a large draggable player preview and a full-body saved-skin grid. Add skin supports file selection or drag and drop. Full-body thumbnails share a single temporary WebGL renderer and are cached, so a large library does not require a graphics context for every tile. Edit opens a modal with texture replacement, wide/slim arms and thumbnail choices for owned capes. The pixel editor is expandable inside the modal. Cancelling discards the draft; Save skin stores it locally. A saved cape preference is applied together with the skin when Apply to Minecraft is clicked, and unavailable cape selections are rejected before changing the skin. An applied marker is shown when the saved appearance matches the current Minecraft profile.

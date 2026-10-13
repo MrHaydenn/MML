@@ -30,6 +30,7 @@ function showPage(page) {
   for (const name of ['discover', 'library', 'settings', 'project', 'accounts', 'instance', 'skins']) $(`#${name}-page`).hidden = page !== name;
   $$('[data-page]').forEach(button => button.classList.toggle('active', button.dataset.page === page));
   $('#breadcrumb').textContent = `Workspace / ${page === 'library' ? 'My library' : page === 'settings' ? 'Settings & about' : page==='skins'?'Skin editor':'Discover'}`;
+  if(typeof renderInstanceShortcuts==='function')renderInstanceShortcuts();
   if (page === 'library') renderLibrary();
   if(page==='skins')openSkins();else if(typeof disposeSkinPreview==='function')disposeSkinPreview();
   if (page === 'accounts') loadMinecraftAccounts();
@@ -38,7 +39,7 @@ function showPage(page) {
 }
 
 function renderAccount(value) {
-  account = value;
+  account = value;$('#account-menu').title=value.connected?`Haydenn account: ${value.user.username}`:'Sign in to Haydenn Accounts';$('#account-menu').setAttribute('aria-label',$('#account-menu').title);
   $('#account-name').textContent = value.connected ? value.user.username : 'Local workspace';
   $('#account-avatar').textContent = value.connected ? value.user.username.charAt(0).toUpperCase() : 'M';
   $('#account-instance').textContent = value.connected ? new URL(value.serviceUrl).host : 'Sign in to Haydenn Accounts';
@@ -166,8 +167,9 @@ enterWorkspace();
 restoreAccount();
 
 function renderUpdate(status) {
-  $('#app-version').textContent = status.current || '0.7.0';
-  $('#update-current').textContent = `Installed: MML ${status.current || '0.7.0'}`;
+  $('#app-version').textContent = status.current || '0.8.0';
+  $('.sidebar-version [data-page="settings"]').title=`Settings & about · MML ${status.current||'0.8.0'}`;
+  $('#update-current').textContent = `Installed: MML ${status.current || '0.8.0'}`;
   $('#update-channel').value = status.channel;
   $('#update-status').textContent = status.message;
   const working = ['checking', 'downloading'].includes(status.status);
@@ -194,7 +196,7 @@ if (window.mml) {
     if (status.status === 'available') toast(`MML ${status.latest} is available. Downloading in the background.`);
   });
   updateAction(() => window.mml.updateState());
-} else renderUpdate({ channel: 'stable', current: '0.7.0', status: 'development', message: 'Install the Windows application to check for and install updates.' });
+} else renderUpdate({ channel: 'stable', current: '0.8.0', status: 'development', message: 'Install the Windows application to check for and install updates.' });
 
 initializeInstances();
 initializeDiscovery();

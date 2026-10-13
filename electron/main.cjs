@@ -62,7 +62,7 @@ app.whenReady().then(() => {
     if (action === 'close') window.close();
   });
   window = new BrowserWindow({ width: 1440, height: 940, minWidth: 1060, minHeight: 720,
-    title: "MrHaydenn's Minecraft Launcher", backgroundColor: '#111313', frame: false,
+    title: "MrHaydenn's Minecraft Launcher", backgroundColor: '#16171b', frame: false,
     icon: path.join(__dirname, '../build/icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true }
   });

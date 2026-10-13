@@ -29,3 +29,10 @@ test('cape changes allow owned capes or hide, and reject unowned capes and chang
  await skins.cape({accountId:id,id:'owned-cape'});assert.deepEqual(JSON.parse(calls.find(c=>c.options.method==='PUT').options.body),{capeId:'owned-cape'});await skins.cape({accountId:id,id:''});assert(calls.some(c=>c.options.method==='DELETE'));
  activate(other);await assert.rejects(skins.profile(id),/changed/);await assert.rejects(skins.texture('https://example.com/skin.png'),/Invalid/);
 });
+
+test('saved cape choices stay local until Apply, which updates both appearance and applied marker',async t=>{
+ const {skins,calls}=await fixture(t);const [skin]=await skins.save({accountId:id,name:'With cape',variant:'classic',data:image(),capeId:'owned-cape'});assert.equal(calls.length,0);assert.equal((await skins.list(id))[0].capeId,'owned-cape');await skins.apply({accountId:id,id:skin.id});assert.equal(JSON.parse(calls.find(c=>c.options.method==='PUT').options.body).capeId,'owned-cape');assert((await skins.list(id))[0].appliedTextureUrl);await skins.save({accountId:id,id:skin.id,name:'Without cape',variant:'classic',data:image(),capeId:null});await skins.apply({accountId:id,id:skin.id});assert(calls.some(c=>c.options.method==='DELETE'));
+});
+test('an unavailable saved cape is rejected before changing the Minecraft skin',async t=>{
+ const {skins,calls}=await fixture(t);const [skin]=await skins.save({accountId:id,name:'Unowned',variant:'classic',data:image(),capeId:'unowned'});await assert.rejects(skins.apply({accountId:id,id:skin.id}),/no longer owns/);assert.equal(calls.filter(c=>c.options.method==='POST').length,0);
+});

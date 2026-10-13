@@ -6,9 +6,9 @@ let minecraftPollTimer;
 function discoverInstance(){return state.profiles.find(p=>p.id===state.discoverInstanceId);}
 function renderDiscoveryContext(){
   const p=discoverInstance();$('[data-type="modpack"]').hidden=Boolean(p);$('#discover-context').hidden=!p;
-  $('#discover-title').textContent=p?`Add content to ${p.name}`:'Discover';
+
   $('#loader-filter').disabled=Boolean(p);$('#version-filter').disabled=Boolean(p);
-  if(p){$('#discover-context-name').textContent=`Minecraft ${p.gameVersion} · ${p.loader} · Installs directly into this instance`;$('#loader-filter').value=p.loader;$('#version-filter').value=p.gameVersion;}
+  if(p){$('#discover-context-name').textContent=`${p.name} · Minecraft ${p.gameVersion} · ${p.loader} · Installs here`;$('#loader-filter').value=p.loader;$('#version-filter').value=p.gameVersion;}
   $$('[data-type]').forEach(tab=>{tab.classList.toggle('selected',tab.dataset.type===state.type);tab.setAttribute('aria-selected',String(tab.dataset.type===state.type));});
   $('#search').placeholder=`Find ${labels[state.type].toLowerCase()}s${p?' for this instance':'…'}`;
 }
@@ -20,7 +20,7 @@ async function search() {
   const grid = state.type === 'modpack';
   const target=discoverInstance();renderDiscoveryContext();
   $('#results').className = grid ? 'project-grid' : 'project-list';
-  $('.discovery-note').textContent = target?`Compatible ${labels[state.type].toLowerCase()}s for ${target.name}`:grid ? 'Popular modpacks · ranked by total downloads on Modrinth' : `${labels[state.type]}s for your Minecraft instances`;
+
   $('#results').innerHTML = Array.from({ length: 6 }, () => '<div class="skeleton" aria-hidden="true"></div>').join('');
   $('#results-label').textContent = 'Searching Modrinth…';
   $('#previous').disabled = true; $('#next').disabled = true;

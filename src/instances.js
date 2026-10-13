@@ -10,7 +10,9 @@ function playButton(id) {
   const s=launchStatuses.get(id), busy=['preparing','stopping'].includes(s?.state);
   return `<button class="primary play-button" ${busy?'disabled':''} ${s?.state==='running'?`data-stop="${escapeHTML(id)}"`:`data-play="${escapeHTML(id)}"`}>${busy?(s.state==='preparing'?'Preparing…':'Stopping…'):s?.state==='running'?'■ Stop':'▶ Play'}</button>`;
 }
+function renderInstanceShortcuts(){const container=$('#sidebar-instances');if(!container)return;container.innerHTML=state.profiles.filter(p=>!p.archived).map(p=>`<button class="rail-instance ${state.page==='instance'&&instanceView?.id===p.id?'active':''}" data-quick-instance="${escapeHTML(p.id)}" aria-label="Open ${escapeHTML(p.name)}" title="${escapeHTML(p.name)}">${instanceIcon(p)}<span class="rail-running" ${launchStatuses.get(p.id)?.state==='running'?'':'hidden'}></span></button>`).join('');}
 function renderLibrary() {
+  renderInstanceShortcuts();
   $('#library-count').textContent=state.profiles.length;
   $('#library-list').className='instance-grid';
   const tile=p=>`<article class="library-card instance-tile" data-instance-tile="${escapeHTML(p.id)}"><button class="instance-tile-open" data-content="${escapeHTML(p.id)}" aria-label="Manage ${escapeHTML(p.name)}">${instanceIcon(p)}</button><h2><button class="project-title" data-content="${escapeHTML(p.id)}">${escapeHTML(p.name)}</button></h2><p>${escapeHTML(p.loader)} · Minecraft ${escapeHTML(p.gameVersion)}<br>${p.autoUpdate?'Latest release · auto-updated':p.source?(p.packUpdates===false?'Detached from modpack':escapeHTML(p.source.title)):'Your Minecraft instance'}</p><div class="tile-launch-status">${escapeHTML(launchStatuses.get(p.id)?.message || '')}</div><div class="library-actions">${p.archived?'':playButton(p.id)}<button class="icon-button" data-content="${escapeHTML(p.id)}" aria-label="Manage instance">⚙</button><button class="text-button" data-archive="${escapeHTML(p.id)}">${p.archived?'Restore':'Archive'}</button></div></article>`;
@@ -71,6 +73,7 @@ async function installInstanceUpdate(input){
   try{const plan=await window.mml.planInstall(input);if(plan.warnings.length&&!window.confirm(plan.warnings.join('\n\n')+'\n\nContinue with this update?'))return;const result=await window.mml.installContent({planId:plan.planId,confirmWarnings:plan.warnings.length>0});state.profiles=result.profiles;v.profile=state.profiles.find(p=>p.id===v.id);v.records=result.contents;v.updates=null;toast('Instance content updated.');await refreshInstanceUpdates(v.id);}catch(error){toast(error.message);}finally{v.syncing=false;renderLibrary();renderInstance();}
 }
 function initializeInstances(){
+  $('#sidebar-instances').onclick=event=>{const button=event.target.closest('[data-quick-instance]');if(button)showInstance(button.dataset.quickInstance);};
   setInterval(()=>{if(state.page==='instance'&&instanceView&&!instanceView.syncing)refreshInstanceUpdates(instanceView.id);},300000);
   window.addEventListener('focus',()=>{if(state.page==='instance'&&instanceView&&!instanceView.syncing)refreshInstanceUpdates(instanceView.id);});
 
