@@ -131,3 +131,48 @@ test('instance settings detach update tracking while preserving pack identity an
   const {library,profile}=await setup(t,{});let profiles=await library.update(profile.id,{packUpdates:false,syncSettings:true,memoryMb:6144});const updated=profiles.find(p=>p.id===profile.id);assert.equal(updated.packUpdates,false);assert.equal(updated.syncSettings,true);assert.equal(updated.memoryMb,6144);assert.equal(updated.gameVersion,'1.21.1');
   await assert.rejects(library.update(profile.id,{memoryMb:0}),/Memory/);assert.equal((await library.list()).find(p=>p.id===profile.id).memoryMb,6144);
 });
+
+async function linkedFixture(t) {
+  const root=version('root'), extra=version('extra',[{project_id:'root',dependency_type:'required'}]);
+  const versions={[root.id]:root,[extra.id]:extra};
+  const {library,directory,api}=await setup(t,versions,{pack:{project_type:'modpack'}});
+  const archives={};
+  function addPack(id,date,mods,config='default',overrides={}){
+    const manifest={formatVersion:1,game:'minecraft',dependencies:{minecraft:'1.21.1','fabric-loader':'0.16.0'},files:mods.map(mod=>({path:'mods/'+mod+'.jar',hashes:hash(mod),downloads:['https://cdn.modrinth.com/'+mod]}))};
+    const archive=zip({'modrinth.index.json':JSON.stringify(manifest),'overrides/config/test.txt':config,...overrides});
+    archives[id]=archive;versions[id]={...version('pack'),id,name:id,date_published:date,version_type:'release',files:[{filename:'pack.mrpack',hashes:hash(archive),url:'https://cdn.modrinth.com/'+id}]};
+  }
+  api.versionFiles=async hashes=>Object.fromEntries(Object.values(versions).filter(v=>hashes.includes(v.files[0].hashes.sha1)).map(v=>[v.files[0].hashes.sha1,v]));
+  const content=createContent({directory:path.join(directory,'linked'),library,api,fetcher:async url=>{const name=new URL(url).pathname.slice(1);return new Response(archives[name]||Buffer.from(name));}});
+  addPack('pack-v1','2026-01-01',['root']);const plan=await content.plan({projectId:'pack'});await content.install({planId:plan.planId});
+  return {content,library,versions,addPack,id:plan.instance.id,game:path.join(content.instancePath(plan.instance.id),'game')};
+}
+test('linked pack pins dependencies, repairs tampering, and unlocks when detached',async t=>{
+  const {content,library,versions,id,game}=await linkedFixture(t);
+  await assert.rejects(content.toggle({instanceId:id,projectId:'root',enabled:false}),/linked modpack/);
+  await assert.rejects(content.plan({projectId:'root',instanceId:id}),/managed/);
+  const extra=await content.plan({projectId:'extra',instanceId:id});assert.equal(extra.files,1);await content.install({planId:extra.planId});
+  assert.equal((await content.read(id)).find(r=>r.projectId==='root').packManaged,true);
+  const wrong={...version('root'),id:'root-v2'};versions[wrong.id]=wrong;versions[extra.contents[0].versionId].dependencies=[{version_id:wrong.id,dependency_type:'required'}];
+  await assert.rejects(content.plan({projectId:'extra',instanceId:id}),/different version/);
+  versions[extra.contents[0].versionId].dependencies=[{project_id:'root',dependency_type:'required'}];
+  assert.equal((await content.syncPack(id)).changed,false);
+  await fs.writeFile(path.join(game,'mods/root.jar'),'changed');assert.equal((await content.syncPack(id)).changed,true);assert.equal(await fs.readFile(path.join(game,'mods/root.jar'),'utf8'),'root');
+  await library.update(id,{packUpdates:false});await content.toggle({instanceId:id,projectId:'root',enabled:false});assert.equal((await content.syncPack(id)).linked,false);
+});
+test('pack updates remove old managed mods and retain additional content, required dependencies, worlds and edited config',async t=>{
+  const {content,versions,addPack,id,game}=await linkedFixture(t);
+  const extra=await content.plan({projectId:'extra',instanceId:id});await content.install({planId:extra.planId});
+  await fs.mkdir(path.join(game,'saves/world'),{recursive:true});await fs.writeFile(path.join(game,'saves/world/data'),'world');await fs.writeFile(path.join(game,'config/test.txt'),'custom');
+  const next=version('newmod');versions[next.id]=next;addPack('pack-v2','2026-02-01',['newmod'],'new-default');
+  const result=await content.syncPack(id);assert.equal(result.changed,true);assert.equal(result.contents.find(r=>r.type==='modpack').versionId,'pack-v2');
+  assert.equal(result.contents.find(r=>r.projectId==='root').packManaged,false);assert.equal(await fs.readFile(path.join(game,'mods/extra.jar'),'utf8'),'extra');assert.equal(await fs.readFile(path.join(game,'mods/root.jar'),'utf8'),'root');
+  assert.equal(await fs.readFile(path.join(game,'config/test.txt'),'utf8'),'custom');assert.equal(await fs.readFile(path.join(game,'saves/world/data'),'utf8'),'world');
+  addPack('pack-v3','2026-03-01',[]);await content.syncPack(id);await assert.rejects(fs.access(path.join(game,'mods/newmod.jar')));
+});
+test('pack update file collisions roll back without replacing additional mods',async t=>{
+  const {content,addPack,id,game}=await linkedFixture(t);
+  const extra=await content.plan({projectId:'extra',instanceId:id});await content.install({planId:extra.planId});
+  addPack('pack-v2','2026-02-01',['root'],'default',{'overrides/mods/extra.jar':'conflict'});
+  await assert.rejects(content.syncPack(id),/conflicts/);assert.equal(await fs.readFile(path.join(game,'mods/extra.jar'),'utf8'),'extra');assert.equal((await content.read(id)).find(r=>r.type==='modpack').versionId,'pack-v1');
+});

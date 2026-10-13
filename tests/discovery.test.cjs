@@ -63,7 +63,7 @@ test('workspace sign-in only submits existing-account credentials and clears the
   const { dom, doc } = await page(t); let submitted;
   assert.equal(doc.querySelector('#account-service-url'),null);
   assert.equal(doc.querySelector('#instance-token'),null);
-  dom.window.mml={setHostingLayout(){},connectAccount:async input=>{submitted=input;return {connected:true,serviceUrl:'https://accounts.mrhaydenn.us',user:{id:'1',username:'MixedCase',role:'member'}};}};
+  dom.window.mml={connectAccount:async input=>{submitted=input;return {connected:true,serviceUrl:'https://accounts.mrhaydenn.us',user:{id:'1',username:'MixedCase',role:'member'}};}};
   doc.querySelector('#shared-username').value='MixedCase';doc.querySelector('#shared-password').value='test password';
   await doc.querySelector('#signin-form').onsubmit({preventDefault(){}});
   assert.equal(submitted.username,'MixedCase');assert.equal(submitted.password,'test password');assert.equal(Object.keys(submitted).length,2);
@@ -72,7 +72,7 @@ test('workspace sign-in only submits existing-account credentials and clears the
 
 test('instance tiles open a full page, expose Play, and instance settings persist sync choices',async t=>{
   const {dom,doc}=await page(t);let saved;
-  dom.window.mml={setHostingLayout(){},installedContent:async()=>[],updateInstance:async(id,settings)=>{saved={id,...settings};return [{id,name:settings.name,gameVersion:'1.21.1',loader:'vanilla',...settings}];}};
+  dom.window.mml={installedContent:async()=>[],updateInstance:async(id,settings)=>{saved={id,...settings};return [{id,name:settings.name,gameVersion:'1.21.1',loader:'vanilla',...settings}];}};
   assert(doc.querySelector('.instance-tile .instance-image'));assert(doc.querySelector('.instance-tile [data-play]'));
   doc.querySelector('[data-content="default-vanilla"]').click();await tick();
   assert.equal(doc.querySelector('#instance-page').hidden,false);assert.equal(doc.querySelector('#instance-dialog').open,false);
@@ -80,4 +80,28 @@ test('instance tiles open a full page, expose Play, and instance settings persis
   await doc.querySelector('#instance-settings-form').onsubmit({preventDefault(){}});assert.equal(saved.syncSettings,true);assert.equal(saved.memoryMb,4096);assert.equal(saved.name,'My settings');
   dom.window.renderMinecraft({accounts:[{id:'player',name:'Player',expires:Date.now()+10000,skinUrl:'https://textures.minecraft.net/texture/'+'a'.repeat(64)}],active:'player',configured:true});
   assert(doc.querySelector('#minecraft-sidebar-avatar .skin-face'));assert.equal(doc.querySelector('#minecraft-sidebar-name').textContent,'Player');
+});
+
+test('instance content browser fixes its target, filters compatible mods, and installs directly',async t=>{
+  const {dom,doc,calls}=await page(t);let planned,installed;
+  dom.window.eval("state.profiles.push({id:'11111111-aaaa-4444-bbbb-111111111111',name:'Fabric pack',gameVersion:'1.21.1',loader:'fabric'})");
+  const id='11111111-aaaa-4444-bbbb-111111111111';
+  // API library refresh also returns the target instance.
+  const original=dom.window.fetch;dom.window.fetch=async(url,options)=>{if(url.endsWith('/library'))return {ok:true,json:async()=>[{id,name:'Fabric pack',gameVersion:'1.21.1',loader:'fabric'}]};return original(url,options);};
+  dom.window.mml={planInstall:async input=>{planned=input;return {planId:'plan',instance:{id,name:'Fabric pack',gameVersion:'1.21.1',loader:'fabric'},version:'Version one',files:1,contents:[],warnings:[]};},installContent:async input=>{installed=input;return {instance:{id,name:'Fabric pack'},profiles:[{id,name:'Fabric pack',gameVersion:'1.21.1',loader:'fabric'}]};},installedContent:async()=>[]};
+  dom.window.openInstanceDiscovery(id);await tick();
+  assert.equal(doc.querySelector('[data-type="modpack"]').hidden,true);assert(doc.querySelector('[data-type="mod"]').classList.contains('selected'));
+  const search=calls.filter(c=>c.method==='search').at(-1).value;assert.equal(search.version,'1.21.1');assert.equal(search.loader,'fabric');
+  doc.querySelector('[data-install]').click();for(let i=0;i<6;i++)await tick();
+  assert.equal(planned.instanceId,id);assert.equal(installed.planId,'plan');assert.equal(doc.querySelector('#instance-page').hidden,false);
+  dom.window.openInstanceDiscovery(id);doc.querySelector('[data-type="resourcepack"]').click();await tick();assert.equal(calls.filter(c=>c.method==='search').at(-1).value.loader,'');
+  doc.querySelector('[data-page="discover"]').click();await tick();assert.equal(doc.querySelector('[data-type="modpack"]').hidden,false);assert(doc.querySelector('[data-type="modpack"]').classList.contains('selected'));
+});
+test('linked modpack content is separate and locked; Servers and MMSM pairing are absent',async t=>{
+  const {dom,doc}=await page(t);
+  assert.equal(doc.querySelector('[data-page="hosting"]'),null);assert.equal(doc.querySelector('#hosting-page'),null);assert.equal(doc.querySelector('#instance-token'),null);
+  dom.window.eval("state.profiles[0].source={id:'pack',title:'Example pack'};state.profiles[0].packUpdates=true");
+  dom.window.mml={installedContent:async()=>[{projectId:'pack',title:'Example pack',type:'modpack',version:'1.0',dependencies:['bundled'],files:[]},{projectId:'bundled',title:'Bundled mod',type:'mod',version:'1.0',files:['mods/bundled.jar']},{projectId:'extra',title:'Extra mod',type:'mod',version:'2.0',files:['mods/extra.jar']}]};
+  await dom.window.showInstance('default-vanilla');assert.match(doc.querySelector('.instance-content-heading').textContent,/Additional content/);assert.equal(doc.querySelector('[data-toggle-mod="bundled"]'),null);assert(doc.querySelector('[data-toggle-mod="extra"]'));
+  doc.querySelector('[data-pack-expand]').click();assert.match(doc.querySelector('.linked-pack').textContent,/Bundled mod/);assert.match(doc.querySelector('.linked-pack').textContent,/Locked/);assert.equal(doc.querySelector('[data-toggle-mod="bundled"]'),null);
 });

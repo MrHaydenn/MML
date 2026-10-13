@@ -27,72 +27,36 @@ function toast(message) {
 }
 function showPage(page) {
   state.page = page;
-  for (const name of ['discover', 'library', 'hosting', 'settings', 'project', 'accounts', 'instance']) $(`#${name}-page`).hidden = page !== name;
+  for (const name of ['discover', 'library', 'settings', 'project', 'accounts', 'instance']) $(`#${name}-page`).hidden = page !== name;
   $$('[data-page]').forEach(button => button.classList.toggle('active', button.dataset.page === page));
-  $('#breadcrumb').textContent = `Workspace / ${page === 'library' ? 'My library' : page === 'hosting' ? 'Servers' : page === 'settings' ? 'Settings & about' : 'Discover'}`;
+  $('#breadcrumb').textContent = `Workspace / ${page === 'library' ? 'My library' : page === 'settings' ? 'Settings & about' : 'Discover'}`;
   if (page === 'library') renderLibrary();
   if (page === 'accounts') loadMinecraftAccounts();
   window.scrollTo({ top: 0 });
-  updateHostingLayout();
-  if (page === 'hosting') {
-    if (window.mml) window.mml.showHosting().then(renderHostingStatus).catch(hostingError);
-    else renderHostingStatus({ state: 'preview' });
-  }
-}
-
-function updateHostingLayout() {
-  if (!window.mml) return;
-  const rect = $('#hosting-viewport').getBoundingClientRect();
-  window.mml.setHostingLayout({ visible: state.page === 'hosting' && !document.body.classList.contains('signing-in') && !document.querySelector('dialog[open]'), bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
-}
-
-function renderHostingStatus(status) {
-  const titles = { idle: 'Your server workspace', loading: 'Connecting to MMSM…', ready: 'MMSM is ready', error: 'Could not connect to MMSM', preview: 'Connect from the Windows app', disconnected: 'Bring your servers into MML' };
-  $('#hosting-status').textContent = { idle: 'Ready to connect', loading: 'Connecting…', ready: 'Connected', error: 'Connection unavailable', preview: 'Browser preview', disconnected: 'Account connection needed' }[status.state] || '';
-  $('#hosting-placeholder').hidden = status.state === 'ready';
-  $('#hosting-message-title').textContent = titles[status.state] || titles.idle;
-  $('#hosting-message').textContent = status.message || (['preview', 'disconnected'].includes(status.state) ? 'Connect your MMSM instance with a token from your profile. The Windows app opens your server manager already signed in.' : 'Your server manager will appear here. You can also open it in your browser.');
-  $('#hosting-retry').hidden = status.state !== 'error';
-  updateHostingLayout();
-}
-
-function reloadHosting() {
-  if (!window.mml) return toast('The embedded server manager is available in the Windows launcher.');
-  window.mml.reloadHosting().then(renderHostingStatus).catch(hostingError);
-}
-
-async function hostingError(error) {
-  renderHostingStatus({ state: 'error', message: error.message });
-  if (window.mml) renderAccount(await window.mml.accountState());
+ 
 }
 
 function renderAccount(value) {
   account = value;
   $('#account-name').textContent = value.connected ? value.user.username : 'Local workspace';
   $('#account-avatar').textContent = value.connected ? value.user.username.charAt(0).toUpperCase() : 'M';
-  $('#account-instance').textContent = value.connected ? new URL(value.instanceUrl || value.serviceUrl).host : 'Sign in to Haydenn Accounts';
-  $('#hosting-origin').textContent = value.instanceUrl ? new URL(value.instanceUrl).host : 'No MMSM instance connected';
-  $('#hosting-account').textContent = value.connected ? `Signed in as ${value.user.username} · ${value.user.role}` : 'Your MMSM server workspace';
-  $('#hosting-connect').hidden = !!value.instanceUrl;
-  $('#hosting-external').disabled = !value.instanceUrl;
-  $('#hosting-reload').disabled = !value.instanceUrl;
+  $('#account-instance').textContent = value.connected ? new URL(value.serviceUrl).host : 'Sign in to Haydenn Accounts';
 }
 
 function enterWorkspace() {
-  $('#signin-screen').hidden = true; document.body.classList.remove('signing-in'); updateHostingLayout();
+  $('#signin-screen').hidden = true; document.body.classList.remove('signing-in');
 }
 
 function showSignin() {
   $('#signin-error').textContent = ''; $('#shared-password').value = '';
-  $('#signin-screen').hidden = false; document.body.classList.add('signing-in'); updateHostingLayout(); $('#shared-username').focus();
+  $('#signin-screen').hidden = false; document.body.classList.add('signing-in'); $('#shared-username').focus();
 }
 
 $('#continue-local').onclick = enterWorkspace;
-$('#hosting-connect').onclick = showSignin;
 $('#account-menu').onclick = () => {
   if (!account.connected) return showSignin();
   $('#signed-in-name').textContent = account.user.username;
-  $('#signed-in-instance').textContent = account.instanceUrl || account.serviceUrl;
+  $('#signed-in-instance').textContent = account.serviceUrl;
   $('#account-error').textContent = '';
   $('#account-dialog').showModal();
 };
@@ -100,7 +64,6 @@ $('#disconnect-account').onclick = async () => {
   $('#disconnect-account').disabled = true; $('#account-error').textContent = '';
   try {
     renderAccount(await window.mml.disconnectAccount()); $('#account-dialog').close();
-    if (state.page === 'hosting') renderHostingStatus({ state: 'disconnected' });
     toast('MML disconnected. Your local library is still here.');
   } catch (error) { $('#account-error').textContent = error.message; }
   finally { $('#disconnect-account').disabled = false; }
@@ -112,7 +75,7 @@ $('#signin-form').onsubmit = async event => {
   const password = $('#shared-password').value; $('#shared-password').value = '';
   try {
     renderAccount(await window.mml.connectAccount({ username: $('#shared-username').value.trim(), password }));
-    enterWorkspace(); showPage(account.instanceUrl ? 'hosting' : 'discover'); toast(`Welcome, ${account.user.username}.`);
+    enterWorkspace(); showPage('discover'); toast(`Welcome, ${account.user.username}.`);
   } catch (error) { $('#signin-error').textContent = error.message; }
   finally { $('#signin-submit').disabled = false; }
 };
@@ -129,20 +92,6 @@ async function restoreAccount() {
     if (account.connected) { enterWorkspace(); toast(error.message); }
     else $('#signin-error').textContent = error.message;
   } finally { $('#signin-submit').disabled = false; }
-}
-
-$('#hosting-external').onclick = () => {
-  if (window.mml) window.mml.openHosting().catch(error => toast(error.message));
-  else if (account.connected) window.open(account.instanceUrl, '_blank', 'noopener,noreferrer');
-};
-$('#hosting-reload').onclick = reloadHosting;
-$('#hosting-retry').onclick = reloadHosting;
-if (window.mml) {
-  window.mml.onHostingStatus(renderHostingStatus);
-  new ResizeObserver(updateHostingLayout).observe($('#hosting-viewport'));
-  new MutationObserver(updateHostingLayout).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
-  window.addEventListener('resize', updateHostingLayout);
-  window.addEventListener('scroll', updateHostingLayout, { passive: true });
 }
 
 function openCreate(project = null, version = null) {
@@ -174,7 +123,7 @@ async function loadVersions() {
   }
 }
 
-$$('[data-page]').forEach(button => button.onclick = () => showPage(button.dataset.page));
+$$('[data-page]').forEach(button => button.onclick = () => button.dataset.page==='discover'?openGlobalDiscovery():showPage(button.dataset.page));
 $$('[data-window]').forEach(button => { button.onclick = () => window.mml?.windowAction(button.dataset.window); if (!window.mml) button.disabled = true; });
 $$('[data-type]').forEach(button => button.onclick = () => {
   state.type = button.dataset.type; state.offset = 0;
@@ -183,7 +132,7 @@ $$('[data-type]').forEach(button => button.onclick = () => {
 });
 $('#search').oninput = () => { state.offset = 0; ++state.request; clearTimeout(searchTimer); searchTimer = setTimeout(search, 350); };
 for (const selector of ['#loader-filter', '#version-filter', '#sort']) $(selector).onchange = () => { clearTimeout(searchTimer); state.offset = 0; search(); };
-$('#reset-filters').onclick = () => { clearTimeout(searchTimer); $('#search').value = ''; $('#loader-filter').value = ''; $('#version-filter').value = ''; $('#sort').value = 'downloads'; state.offset = 0; search(); };
+$('#reset-filters').onclick = () => { clearTimeout(searchTimer); $('#search').value = ''; $('#loader-filter').value = ''; $('#version-filter').value = ''; $('#sort').value = 'downloads'; state.offset = 0;renderDiscoveryContext();search(); };
 $('#previous').onclick = () => { state.offset = Math.max(0, state.offset - 12); search(); };
 $('#next').onclick = () => { state.offset += 12; search(); };
 $('#results').onclick = discoveryClick;
@@ -214,8 +163,8 @@ loadVersions(); search();
 restoreAccount();
 
 function renderUpdate(status) {
-  $('#app-version').textContent = status.current || '0.5.0';
-  $('#update-current').textContent = `Installed: MML ${status.current || '0.5.0'}`;
+  $('#app-version').textContent = status.current || '0.6.0';
+  $('#update-current').textContent = `Installed: MML ${status.current || '0.6.0'}`;
   $('#update-channel').value = status.channel;
   $('#update-status').textContent = status.message;
   const working = ['checking', 'downloading'].includes(status.status);
@@ -240,7 +189,7 @@ if (window.mml) {
     if (status.status === 'available') toast(`MML ${status.latest} is available. Open Settings to update.`);
   });
   updateAction(() => window.mml.updateState());
-} else renderUpdate({ channel: 'stable', current: '0.5.0', status: 'development', message: 'Install the Windows application to check for and install updates.' });
+} else renderUpdate({ channel: 'stable', current: '0.6.0', status: 'development', message: 'Install the Windows application to check for and install updates.' });
 
 initializeInstances();
 initializeDiscovery();

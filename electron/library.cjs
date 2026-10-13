@@ -42,6 +42,7 @@ function createLibrary(directory) {
       const profile = profiles.find(p => p.id === id); if (!profile) throw new Error('Instance not found.');
       if (input.name !== undefined) { if (typeof input.name !== 'string' || !input.name.trim() || input.name.trim().length > 60) throw new Error('Choose a name between 1 and 60 characters.'); profile.name = input.name.trim(); }
       if (input.memoryMb !== undefined) { if (!Number.isInteger(input.memoryMb) || input.memoryMb < 1024 || input.memoryMb > 32768) throw new Error('Memory must be between 1024 and 32768 MB.'); profile.memoryMb = input.memoryMb; }
+      if(input.loaderVersion!==undefined){if(input.loaderVersion!==null&&!/^[a-zA-Z0-9.+_-]{1,100}$/.test(input.loaderVersion))throw new Error('Invalid loader version.');profile.loaderVersion=input.loaderVersion;}
       for (const key of ['syncSettings', 'packUpdates']) if (input[key] !== undefined) { if (typeof input[key] !== 'boolean') throw new Error('Invalid instance setting.'); profile[key] = input[key]; }
       if (typeof input.iconUrl === 'string' && /^https:\/\/cdn\.modrinth\.com\//.test(input.iconUrl)) profile.iconUrl = input.iconUrl;
       return profiles;

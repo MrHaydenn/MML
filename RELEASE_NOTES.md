@@ -1,13 +1,9 @@
-# MML 0.5.0
+# MML 0.6.0
 
-MML can now launch Minecraft on Windows. Play automatically installs the matching Mojang Java runtime, game files, libraries, assets and instance loader, then launches using the selected verified Minecraft account. Vanilla, Fabric, Forge, NeoForge and Quilt are supported.
+- Add content from an instance opens a compatible Mods, Resource packs and Shaders browser with Mods selected. Install targets that instance automatically; incompatibility still requires confirmation.
+- Linked modpack content appears above Additional content. View its pinned versions or use Sync now. Play checks for the latest release for the same Minecraft version and loader and repairs managed content before launching.
+- Additional mods reuse linked dependencies without replacing pinned pack versions. Updates preserve worlds and edited configuration files, and stop safely on conflicting additional content.
+- Unlink in instance Settings to edit pack mods independently and stop automatic pack updates.
+- Removed the Servers tab and MMSM connection. Haydenn Accounts and Microsoft/Minecraft sign-in remain available.
 
-- Square library tiles with the instance image in the top-left and Play/Stop controls.
-- A dedicated instance page with content search and filters, mod toggles, account selection, settings and launch logs.
-- Per-instance name and memory settings, shared game options and saved servers, and an option to detach from original modpack update notifications.
-- Minecraft skin faces beside the prominent sidebar account; a grass block when signed out, with a smaller Haydenn Accounts entry.
-- Microsoft sign-in codes are copied before the browser opens.
-
-Validation: 41 automated tests passed. Real authenticated Fabric Minecraft launches reached rendering/audio initialization on both Minecraft 1.21.1 / Java 21 and Minecraft 26.3 / Java 25. Real Forge, NeoForge and Quilt first-play preparations passed. The real Electron UI confirmed square tiles and rendered the instance page.
-
-Download and run MML-Setup-0.5.0.exe. First play downloads game components and can take several minutes. Keep MML open while playing for launch logs and settings synchronization; shared options are saved when the game exits. Existing instances and accounts are retained. The development installer is unsigned.
+Run MML-Setup-0.6.0.exe, or update from within MML. Existing instances and Haydenn Accounts sessions are retained. Legacy MMSM connections are no longer used. Minecraft or loader-type upgrades require installing a new pack instance for now.

@@ -1,10 +1,9 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, shell, safeStorage, session, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, safeStorage, clipboard } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
 const { createClient } = require('./modrinth.cjs');
 const { createLibrary } = require('./library.cjs');
-const { createHosting } = require('./hosting.cjs');
 const { createAccount } = require('./account.cjs');
 const { createUpdater } = require('./updater.cjs');
 const { autoUpdater } = require('electron-updater');
@@ -39,10 +38,11 @@ app.whenReady().then(() => {
   handle('library:create', async input => { await libraryReady; return library.create(input); });
   handle('library:remove', async id => { await libraryReady; launcher.guard(id); if (id === 'default-vanilla') throw new Error('The latest Vanilla instance is managed automatically.'); return library.remove(id); });
   handle('library:update', async ({id,settings}) => { await libraryReady; launcher.guard(id); return library.update(id,settings); });
-  handle('content:plan', async input => { await libraryReady; return content.plan(input); });
+  handle('content:plan', async input => { await libraryReady; if(launcher.anyActive())throw new Error('Stop Minecraft before installing content.');return content.plan(input); });
   handle('content:install', input => { if (launcher.anyActive()) throw new Error('Stop Minecraft before installing content.'); return content.install(input); });
   handle('content:list', id => content.read(id));
   handle('content:toggle', input => { launcher.guard(input.instanceId); return content.toggle(input); });
+  handle('instance:syncPack', async id=>{launcher.guard(id);return content.syncPack(id);});
   handle('instance:updates', async id => {
     const profile=(await library.list()).find(p=>p.id===id);if(!profile) throw new Error('Instance not found.');
     if(!profile.source || profile.packUpdates===false) return {following:false};
@@ -103,32 +103,11 @@ app.whenReady().then(() => {
   window.webContents.once('did-finish-load', () => {
     updateReady.then(() => updater.check()).catch(() => {});
   });
-  const hosting = createHosting(window, { WebContentsView, shell });
-  const account = createAccount({ directory: app.getPath('userData'), safeStorage, sessionFor: partition => session.fromPartition(partition) });
-  const configureHosting = () => {
-    const current = account.current();
-    if (current.connected && current.instanceUrl) hosting.configure(current.instanceUrl, account.partition());
-    else hosting.reset();
-    return current;
-  };
-  handle('account:restore', async () => { await account.restore(); return configureHosting(); });
-  handle('account:state', () => account.current());
-  handle('account:connect', async input => { await account.connect(input); return configureHosting(); });
-  handle('account:disconnect', async () => { hosting.reset(); await account.disconnect(); return configureHosting(); });
-  const showHosting = async () => {
-    if (!account.current().instanceUrl) return { state: 'disconnected' };
-    hosting.reset();
-    try { await account.refresh(); }
-    finally { configureHosting(); }
-    return hosting.show();
-  };
-  handle('hosting:show', showHosting);
-  handle('hosting:reload', showHosting);
-  handle('hosting:openExternal', () => hosting.openExternal());
-  ipcMain.on('hosting:layout', (event, input) => {
-    if (!trusted(event)) return;
-    try { hosting.setLayout(input); } catch { /* Ignore malformed layout messages. */ }
-  });
+  const account = createAccount({directory:app.getPath('userData'),safeStorage});
+  handle('account:restore',()=>account.restore());
+  handle('account:state',()=>account.current());
+  handle('account:connect',input=>account.connect(input));
+  handle('account:disconnect',()=>account.disconnect());
   window.loadFile(page);
 });
 app.on('window-all-closed', () => app.quit());

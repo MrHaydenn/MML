@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('mml', {
   removeProfile: id => ipcRenderer.invoke('library:remove', id),
   updateInstance: (id,settings) => ipcRenderer.invoke('library:update', {id,settings}),
   instanceUpdates: id => ipcRenderer.invoke('instance:updates', id),
+  syncPack: id => ipcRenderer.invoke('instance:syncPack', id),
   toggleMod: input => ipcRenderer.invoke('content:toggle', input),
   playInstance: id => ipcRenderer.invoke('launcher:play', id),
   stopInstance: id => ipcRenderer.invoke('launcher:stop', id),
@@ -37,15 +38,6 @@ contextBridge.exposeInMainWorld('mml', {
   accountState: () => ipcRenderer.invoke('account:state'),
   connectAccount: input => ipcRenderer.invoke('account:connect', input),
   disconnectAccount: () => ipcRenderer.invoke('account:disconnect'),
-  showHosting: () => ipcRenderer.invoke('hosting:show'),
-  reloadHosting: () => ipcRenderer.invoke('hosting:reload'),
-  openHosting: () => ipcRenderer.invoke('hosting:openExternal'),
-  setHostingLayout: layout => ipcRenderer.send('hosting:layout', layout),
-  onHostingStatus: callback => {
-    const listener = (_event, status) => callback(status);
-    ipcRenderer.on('hosting:status', listener);
-    return () => ipcRenderer.removeListener('hosting:status', listener);
-  },
   windowAction: action => ipcRenderer.send('window:action', action),
   updateState: () => ipcRenderer.invoke('updates:state'),
   updateChannel: value => ipcRenderer.invoke('updates:channel', value),

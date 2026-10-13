@@ -3,17 +3,30 @@ let currentProject = null;
 let currentProjectVersions = [];
 let installSequence = 0;
 let minecraftPollTimer;
+function discoverInstance(){return state.profiles.find(p=>p.id===state.discoverInstanceId);}
+function renderDiscoveryContext(){
+  const p=discoverInstance();$('[data-type="modpack"]').hidden=Boolean(p);$('#discover-context').hidden=!p;
+  $('#discover-title').textContent=p?`Add content to ${p.name}`:'Discover';
+  $('#loader-filter').disabled=Boolean(p);$('#version-filter').disabled=Boolean(p);
+  if(p){$('#discover-context-name').textContent=`Minecraft ${p.gameVersion} · ${p.loader} · Installs directly into this instance`;$('#loader-filter').value=p.loader;$('#version-filter').value=p.gameVersion;}
+  $$('[data-type]').forEach(tab=>{tab.classList.toggle('selected',tab.dataset.type===state.type);tab.setAttribute('aria-selected',String(tab.dataset.type===state.type));});
+  $('#search').placeholder=`Find ${labels[state.type].toLowerCase()}s${p?' for this instance':'…'}`;
+}
+function openInstanceDiscovery(id){state.discoverInstanceId=id;state.type='mod';state.offset=0;$('#search').value='';showPage('discover');renderDiscoveryContext();search();}
+function openGlobalDiscovery(){state.discoverInstanceId=null;state.type='modpack';state.offset=0;$('#loader-filter').value='';$('#version-filter').value='';$('#search').value='';showPage('discover');renderDiscoveryContext();search();}
 
 async function search() {
   const request = ++state.request;
   const grid = state.type === 'modpack';
+  const target=discoverInstance();renderDiscoveryContext();
   $('#results').className = grid ? 'project-grid' : 'project-list';
-  $('.discovery-note').textContent = grid ? 'Popular modpacks · ranked by total downloads on Modrinth' : `${labels[state.type]}s for your Minecraft instances`;
+  $('.discovery-note').textContent = target?`Compatible ${labels[state.type].toLowerCase()}s for ${target.name}`:grid ? 'Popular modpacks · ranked by total downloads on Modrinth' : `${labels[state.type]}s for your Minecraft instances`;
   $('#results').innerHTML = Array.from({ length: 6 }, () => '<div class="skeleton" aria-hidden="true"></div>').join('');
   $('#results-label').textContent = 'Searching Modrinth…';
   $('#previous').disabled = true; $('#next').disabled = true;
   try {
-    const data = await api.search({ type: state.type, query: $('#search').value, loader: $('#loader-filter').value, version: $('#version-filter').value, sort: $('#sort').value, offset: state.offset });
+    if(target&&state.type==='mod'&&target.loader==='vanilla'){$('#results').innerHTML='<div class="empty-state"><h2>Vanilla Minecraft does not load mods</h2><p>Use a Fabric, Forge, NeoForge or Quilt instance for mods. Resource packs are available in the tabs above.</p></div>';$('#results-label').textContent='Vanilla instance';return;}
+    const data = await api.search({ type: state.type, query: $('#search').value, loader: target?(state.type==='mod'?target.loader:''):$('#loader-filter').value, version:target?target.gameVersion:$('#version-filter').value, sort: $('#sort').value, offset: state.offset });
     if (request !== state.request) return;
     discoverProjects = new Map(data.hits.map(project => [project.project_id, project]));
     state.total = data.total_hits;
@@ -62,7 +75,7 @@ async function showDetails(id, tab = 'overview') {
   }
 }
 function renderProject(tab) {
-  const p = currentProject, versions = currentProjectVersions;
+  const p = currentProject,target=discoverInstance(),versions = target?currentProjectVersions.filter(v=>v.game_versions.includes(target.gameVersion)&&(p.project_type!=='mod'||v.loaders.includes(target.loader))):currentProjectVersions;
   const markdown = DOMPurify.sanitize(marked.parse(String(p.body || p.description).slice(0, 500000)), { USE_PROFILES: { html: true }, FORBID_TAGS: ['style', 'iframe', 'form', 'input', 'button', 'video', 'audio'], FORBID_ATTR: ['style', 'id', 'name'] });
   $('#project-content').innerHTML = `<div class="project-home-header">${icon(p)}<div><div class="eyebrow muted">${escapeHTML(labels[p.project_type])}</div><h1>${escapeHTML(p.title)}</h1><p>${escapeHTML(p.description)}</p><span class="card-author">↓ ${compact(p.downloads)} downloads · ${compact(p.followers)} followers</span></div><button class="primary" data-project-install>Install ↓</button></div><div class="project-home-tabs"><button class="${tab === 'overview' ? 'selected' : ''}" data-project-tab="overview">Overview</button><button class="${tab === 'versions' ? 'selected' : ''}" data-project-tab="versions">Versions (${versions.length})</button><button class="text-button" id="project-external">View on Modrinth ↗</button></div>${tab === 'overview' ? `<div class="project-markdown">${markdown}</div>` : `<div class="project-version-filters"><label>Minecraft version<select id="project-game-filter"><option value="">All Minecraft versions</option>${[...new Set(versions.flatMap(v => v.game_versions))].map(v => `<option>${escapeHTML(v)}</option>`).join('')}</select></label><label>Loader<select id="project-loader-filter"><option value="">All loaders</option>${[...new Set(versions.flatMap(v => v.loaders))].map(v => `<option>${escapeHTML(v)}</option>`).join('')}</select></label></div><div id="project-versions"></div>`}`;
   $('#project-content').querySelectorAll('img').forEach(img => { if (!safeImage(img.getAttribute('src'))) img.remove(); else { img.loading = 'lazy'; img.removeAttribute('srcset'); } });
@@ -77,6 +90,7 @@ function renderProject(tab) {
 }
 async function openInstall(projectId, versionId = '') {
   const sequence = ++installSequence, dialog = $('#install-dialog');
+  const target=discoverInstance();
   $('#install-content').innerHTML = '<h2>Preparing installation…</h2><p>Loading versions and Minecraft instances.</p>';
   if (!dialog.open) dialog.showModal();
   try {
@@ -86,10 +100,12 @@ async function openInstall(projectId, versionId = '') {
     const pack = project.project_type === 'modpack';
     $('#install-content').innerHTML = `<div class="dialog-heading"><h2>Install ${escapeHTML(project.title)}</h2><button class="icon-button" id="install-close" aria-label="Close">×</button></div><p class="dialog-intro">${pack ? 'This pack will create a separate Minecraft instance with its declared game and loader version.' : 'Choose an instance. Automatic selection uses the newest version that declares compatibility with its Minecraft version and loader.'}</p><form id="install-form">${pack ? '' : `<label>Minecraft instance<select id="install-instance" required><option value="">Choose an instance…</option>${profiles.map(p => `<option value="${escapeHTML(p.id)}">${escapeHTML(p.name)} · ${escapeHTML(p.gameVersion)} / ${escapeHTML(p.loader)}</option>`).join('')}</select></label>${profiles.length ? '' : '<p>Create an instance in My library before installing content.</p>'}`}<label>Project version<select id="install-version"><option value="">${pack ? 'Latest pack release' : 'Automatic · newest compatible version'}</option>${versions.map(v => `<option value="${escapeHTML(v.id)}">${escapeHTML(v.name)} · ${escapeHTML(v.game_versions.join(', '))} / ${escapeHTML(v.loaders.join(', '))}</option>`).join('')}</select></label><p id="install-hint" class="dialog-intro"></p><p id="install-error" class="error-text" role="alert"></p><button class="primary" id="install-preview" type="submit">Review installation →</button></form><div id="install-review"></div>`;
     $('#install-close').onclick = () => dialog.close();
+    if(target&&!pack){$('#install-instance').value=target.id;$('#install-instance').disabled=true;$('#install-content .dialog-intro').textContent=`Installs directly into ${target.name}. Compatible versions and required dependencies are selected automatically.`;$('#install-form').hidden=true;}
     $('#install-version').value = versionId;
     if (!pack) {
       const previous = localStorage.getItem('mml-install-instance');
-      if (profiles.some(p => p.id === previous)) $('#install-instance').value = previous;
+      if(target)$('#install-instance').value=target.id;
+      else if (profiles.some(p => p.id === previous)) $('#install-instance').value = previous;
       else if (profiles.length === 1) $('#install-instance').value = profiles[0].id;
     }
     const hint = () => {
@@ -118,13 +134,15 @@ async function openInstall(projectId, versionId = '') {
           dialog.dataset.installing = 'true';
           try {
             const result = await window.mml.installContent({ planId: plan.planId, confirmWarnings: Boolean($('#install-confirm-risk')?.checked) });
-            state.profiles = result.profiles; renderLibrary(); dialog.close(); showPage('library'); toast(`${project.title} installed into ${result.instance.name}.`);
+            state.profiles = result.profiles; renderLibrary(); dialog.close();if(target)await showInstance(result.instance.id);else showPage('library'); toast(`${project.title} installed into ${result.instance.name}.`);
           } catch (error) { $('#install-progress').textContent = error.message; $('#install-commit').disabled = false; }
           finally { delete dialog.dataset.installing; if ($('#install-close')) $('#install-close').disabled = false; }
         };
-      } catch (error) { if (sequence === installSequence && dialog.open) $('#install-error').textContent = error.message; }
+        if(target&&!plan.warnings.length)await $('#install-commit').onclick();
+      } catch (error) { if(target&&$('#install-form'))$('#install-form').hidden=false; if (sequence === installSequence && dialog.open) $('#install-error').textContent = error.message; }
       finally { if ($('#install-preview')) $('#install-preview').disabled = false; }
     };
+    if(target&&!pack)await $('#install-form').onsubmit({preventDefault(){}});
   } catch (error) {
     if (sequence !== installSequence || !dialog.open) return;
     $('#install-content').innerHTML = `<h2>Could not prepare installation</h2><p>${escapeHTML(error.message)}</p><button id="install-close" class="secondary">Close</button>`;
@@ -147,6 +165,7 @@ async function loadMinecraftAccounts() {
   try { renderMinecraft(await window.mml.minecraftState()); } catch (error) { $('#minecraft-error').textContent = error.message; }
 }
 function initializeDiscovery() {
+  $('#discover-back-instance').onclick=()=>{const p=discoverInstance();if(p)showInstance(p.id);};
   $('#project-back').onclick = () => showPage('discover');
   $('#project-content').onclick = event => {
     const tab = event.target.closest('[data-project-tab]'); if (tab) return renderProject(tab.dataset.projectTab);

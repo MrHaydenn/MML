@@ -16,6 +16,14 @@ function newest(versions) { return [...versions].sort((a, b) => new Date(b.date_
 function graph(records) {
   return records.map(record => ({ ...record, requiredBy: records.filter(other => other.dependencies?.includes(record.projectId)).map(other => other.title) }));
 }
+function packMembers(records) {
+  const root = records.find(r => r.type === 'modpack');
+  return new Set([...(root?.dependencies || []), ...records.filter(r=>r.packManaged).map(r=>r.projectId)]);
+}
+async function matchesFile(file, hashes) {
+  try { const bytes=await fs.readFile(file), entries=Object.entries(hashes||{}).filter(([algorithm])=>['sha1','sha256','sha512'].includes(algorithm));return entries.length>0&&entries.every(([algorithm,hash])=>createHash(algorithm).update(bytes).digest('hex')===hash); }
+  catch(error){if(error.code==='ENOENT')return false;throw error;}
+}
 function allowedDownload(value) {
   const u = new URL(value);
   if (u.protocol !== 'https:' || u.username || u.password || !['cdn.modrinth.com', 'github.com', 'raw.githubusercontent.com', 'objects.githubusercontent.com', 'release-assets.githubusercontent.com', 'resources.download.minecraft.net'].includes(u.hostname)) throw new Error('This pack uses an unsupported download host.');
@@ -98,15 +106,19 @@ function createContent({ directory, library, api, fetcher = fetch, notify = () =
     for (const [key, value] of plans) if (value.expires < Date.now()) { await fs.rm(value.work, { recursive: true, force: true }); plans.delete(key); }
     if (plans.size >= 10) throw new Error('Close old installation previews before starting another.');
     const project = await api.project(input.projectId);
-    const profile = project.project_type === 'modpack' ? { id: randomUUID(), name: project.title.slice(0, 60), gameVersion: '1.21.1', loader: 'vanilla', iconUrl: project.icon_url || null, packUpdates: true, source: { id: project.id, title: project.title }, createdAt: new Date().toISOString() } : (await library.list()).find(p => p.id === input.instanceId);
+    const profile = project.project_type === 'modpack' && !input.syncPack ? { id: randomUUID(), name: project.title.slice(0, 60), gameVersion: '1.21.1', loader: 'vanilla', iconUrl: project.icon_url || null, packUpdates: true, source: { id: project.id, title: project.title }, createdAt: new Date().toISOString() } : (await library.list()).find(p => p.id === input.instanceId);
     if (!profile) throw new Error('Choose a Minecraft instance first.');
     await recover(profile.id);
     const before = await read(profile.id);
+    const members=packMembers(before), oldPack=before.find(r=>r.type==='modpack');
+    if(input.syncPack && (project.project_type!=='modpack'||profile.packUpdates===false||profile.source?.id!==project.id)) throw new Error('This instance is not linked to that modpack.');
+    if(!input.syncPack && profile.source && profile.packUpdates!==false && members.has(project.id)) throw new Error('This content is managed by the linked modpack. Unlink the instance before changing its required versions.');
     const versions = newest(await api.versions(project.id));
-    const selected = input.versionId ? versions.find(v => v.id === input.versionId) : versions.find(v => project.project_type === 'modpack' || compatible(v, profile, project.project_type)) || versions[0];
+    const current=versions.find(v=>v.id===oldPack?.versionId);
+    const selected = input.syncPack ? versions.find(v=>v.version_type==='release' && v.game_versions.includes(profile.gameVersion) && v.loaders.includes(profile.loader) && (!current || new Date(v.date_published)>=new Date(current.date_published))) || current : input.versionId ? versions.find(v => v.id === input.versionId) : versions.find(v => project.project_type === 'modpack' || compatible(v, profile, project.project_type)) || versions[0];
     if (!selected) throw new Error('This project has no downloadable versions.');
     const id = randomUUID(), work = path.join(directory, '.plan-' + id);
-    const value = { id, work, profile, before: JSON.stringify(before), project, selected, warnings: [], records: [], files: [], expires: Date.now() + 600000, isPack: project.project_type === 'modpack' };
+    const value = { id, work, profile:{...profile}, before: JSON.stringify(before), beforeRecords:before, members, syncPack:Boolean(input.syncPack), project, selected, warnings: [], records: [], files: [], expires: Date.now() + 600000, isPack: project.project_type === 'modpack' };
     await fs.mkdir(work, { recursive: true });
     try {
       if (value.isPack) await preparePack(value);
@@ -122,10 +134,15 @@ function createContent({ directory, library, api, fetcher = fetch, notify = () =
       if (value.files.length > 2000) throw new Error('This installation contains too many files.');
       if (value.files.reduce((sum, f) => sum + (f.size || 0), 0) > 4 * 1024 * 1024 * 1024) throw new Error('This installation exceeds the 4 GB content limit.');
       plans.set(id, value);
-      return { planId: id, instance: profile, project: project.title, version: selected.name, warnings: [...new Set(value.warnings)], contents: graph(value.records), files: value.files.length, newInstance: value.isPack };
+      return { planId: id, instance: value.profile, project: project.title, version: selected.name, warnings: [...new Set(value.warnings)], contents: graph(value.records), files: value.files.length, newInstance: value.isPack&&!value.syncPack };
     } catch (error) { await fs.rm(work, { recursive: true, force: true }); throw error; }
   }
   async function resolve(value, project, version, visiting) {
+    const pinned=value.beforeRecords.find(r=>r.projectId===project.id);
+    if(value.profile.source && value.profile.packUpdates!==false && value.members.has(project.id) && pinned) {
+      if(pinned.versionId!==version.id) throw new Error(`${project.title} requires a different version than the linked modpack. Unlink the pack or choose a compatible additional mod.`);
+      return;
+    }
     const existing = value.records.find(r => r.projectId === project.id);
     if (existing) { if (existing.versionId !== version.id) throw new Error(`Required dependencies request conflicting versions of ${project.title}.`); return; }
     if (visiting.size > 150) throw new Error('Dependency graph is too large.');
@@ -141,7 +158,8 @@ function createContent({ directory, library, api, fetcher = fetch, notify = () =
       if (dep.version_id) { depVersion = await api.version(dep.version_id); depProject = await api.project(depVersion.project_id); }
       else if (dep.project_id) {
         depProject = await api.project(dep.project_id);
-        depVersion = newest(await api.versions(dep.project_id)).find(v => compatible(v, value.profile, depProject.project_type));
+        const pinned=value.profile.source&&value.profile.packUpdates!==false&&value.members.has(dep.project_id)&&value.beforeRecords.find(r=>r.projectId===dep.project_id);
+        depVersion = pinned ? await api.version(pinned.versionId) : newest(await api.versions(dep.project_id)).find(v => compatible(v, value.profile, depProject.project_type));
       } else throw new Error(`${project.title} has an unresolved required dependency.`);
       if (!depVersion) throw new Error(`No compatible required dependency for ${depProject.title}. Installation stopped.`);
       record.dependencies.push(depProject.id);
@@ -161,6 +179,7 @@ function createContent({ directory, library, api, fetcher = fetch, notify = () =
     if (Object.keys(index.dependencies).some(k => k !== 'minecraft' && !loaders[k])) throw new Error('This pack requires an unsupported game component.');
     const loader = Object.keys(loaders).filter(k => index.dependencies[k]);
     if (loader.length > 1) throw new Error('This pack declares multiple incompatible loaders.');
+    if(value.syncPack && (index.dependencies.minecraft!==value.profile.gameVersion || (loaders[loader[0]]||'vanilla')!==value.profile.loader)) throw new Error('The pack update changes Minecraft or its loader. Install it as a new instance instead.');
     value.profile.gameVersion = index.dependencies.minecraft; value.profile.loader = loaders[loader[0]] || 'vanilla'; value.profile.loaderVersion = index.dependencies[loader[0]] || null;
     for (const file of index.files) {
       safePath(file.path);
@@ -173,7 +192,9 @@ function createContent({ directory, library, api, fetcher = fetch, notify = () =
     const included = new Set(Object.values(found).map(v => v.project_id));
     for (const version of Object.values(found)) {
       if (value.records.some(r => r.projectId === version.project_id)) continue;
-      value.records.push({ projectId: version.project_id, title: version.name, versionId: version.id, version: version.name, type: 'mod', files: value.files.filter(f => found[f.hashes.sha1]?.project_id === version.project_id).map(f => f.path), dependencies: version.dependencies.filter(d => d.dependency_type === 'required').map(d => d.project_id || Object.values(found).find(v => v.id === d.version_id)?.project_id).filter(id => included.has(id)), explicit: false });
+      const files=value.files.filter(f => found[f.hashes.sha1]?.project_id === version.project_id).map(f=>f.path);
+      const type=files[0]?.startsWith('resourcepacks/')?'resourcepack':files[0]?.startsWith('shaderpacks/')?'shader':'mod';
+      value.records.push({ projectId: version.project_id, title: version.name, versionId: version.id, version: version.name, type, packManaged:true, files, dependencies: version.dependencies.filter(d => d.dependency_type === 'required').map(d => d.project_id || Object.values(found).find(v => v.id === d.version_id)?.project_id).filter(id => included.has(id)), explicit: false });
     }
     const owned = new Set(value.records.flatMap(r => r.files));
     const extra = value.files.filter(f => !owned.has(f.path)).map(f => f.path);
@@ -184,6 +205,8 @@ function createContent({ directory, library, api, fetcher = fetch, notify = () =
     await overrideFiles(path.join(extracted, 'overrides')); await overrideFiles(path.join(extracted, 'client-overrides'));
     value.records.unshift({ projectId: value.project.id, title: value.project.title, versionId: value.selected.id, version: value.selected.name, type: 'modpack', files: [...new Set(extra)], dependencies: [...included], explicit: true });
     value.extracted = extracted;
+    value.packManifest={versionId:value.selected.id,files:value.files.map(f=>({path:f.path,hashes:f.hashes}))};
+    for(const name of extra){for(const folder of ['client-overrides','overrides']){try{const bytes=await fs.readFile(path.join(extracted,folder,name));value.packManifest.files=value.packManifest.files.filter(f=>f.path!==name);value.packManifest.files.push({path:name,hashes:{sha256:createHash('sha256').update(bytes).digest('hex')}});break;}catch(error){if(error.code!=='ENOENT')throw error;}}}
   }
   async function install(input) {
     if (busy) throw new Error('An installation is already running.');
@@ -197,15 +220,37 @@ function createContent({ directory, library, api, fetcher = fetch, notify = () =
       await recover(value.profile.id);
       if (JSON.stringify(await read(value.profile.id)) !== value.before) throw new Error('Instance content changed. Preview the installation again.');
       const profile = (await library.list()).find(p => p.id === value.profile.id);
-      if (!value.isPack && (!profile || profile.gameVersion !== value.profile.gameVersion || profile.loader !== value.profile.loader)) throw new Error('Instance changed. Preview the installation again.');
+      if ((!value.isPack||value.syncPack) && (!profile || profile.gameVersion !== value.profile.gameVersion || profile.loader !== value.profile.loader || (value.syncPack&&profile.packUpdates===false))) throw new Error('Instance changed. Preview the installation again.');
       await fs.rm(stage, { recursive: true, force: true });
       try { await fs.access(target); await assertNoLinks(target); await fs.cp(target, stage, { recursive: true }); } catch (error) { if (error.code !== 'ENOENT') throw error; await fs.mkdir(stage, { recursive: true }); }
       let records = await read(value.profile.id);
+      let oldManifest={files:[]};try{oldManifest=JSON.parse(await fs.readFile(path.join(target,'mml-pack.json'),'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
+      const preserve=new Set();
+      if(value.syncPack){
+        const additional=records.filter(r=>r.type!=='modpack'&&!value.members.has(r.projectId));
+        for(const record of additional){
+          if(record.versionId){const version=await api.version(record.versionId);for(const dep of version.dependencies.filter(d=>d.dependency_type==='required')){
+            const exact=dep.version_id?await api.version(dep.version_id):null,id=dep.project_id||exact?.project_id,newRequired=value.records.find(r=>r.projectId===id);
+            if(exact&&newRequired&&newRequired.versionId!==exact.id)throw new Error(`${record.title} conflicts with the linked pack update. Unlink the pack or remove the conflicting additional content first.`);
+            if(value.members.has(id)&&!newRequired)preserve.add(id);
+          }}
+        }
+        // Preserve a removed pack dependency when additional content still requires it.
+        let added=true;while(added){added=false;for(const record of records.filter(r=>preserve.has(r.projectId)))for(const dep of record.dependencies||[])if(value.members.has(dep)&&!value.records.some(r=>r.projectId===dep)&&!preserve.has(dep)){preserve.add(dep);added=true;}}
+        const oldManaged=records.filter(r=>(r.type==='modpack'||value.members.has(r.projectId))&&!preserve.has(r.projectId));
+        for(const record of oldManaged)for(const name of record.files){
+          const file=path.join(stage,'game',safePath(name)), required=/^(mods|resourcepacks|shaderpacks)\//.test(name), hash=oldManifest.files.find(f=>f.path===name)?.hashes;
+          if(required || (hash&&await matchesFile(file,hash))) {await fs.rm(file,{force:true});await fs.rm(file+'.disabled',{force:true});}
+        }
+        records=records.filter(r=>!oldManaged.includes(r)).map(r=>preserve.has(r.projectId)?{...r,packManaged:false}:r);
+        for(const r of value.records)if(r.type!=='modpack')r.enabled=true;
+      }
       for (const record of value.records) {
         const old = records.find(r => r.projectId === record.projectId);
-        if (old) { record.enabled = old.enabled !== false; for (const file of old.files) await fs.rm(path.join(stage, 'game', safePath(file) + (old.enabled === false ? '.disabled' : '')), { force: true }); }
+        if (old) { if(!value.syncPack)record.enabled = old.enabled !== false; for (const file of old.files) await fs.rm(path.join(stage, 'game', safePath(file) + (old.enabled === false ? '.disabled' : '')), { force: true }); }
       }
       const destinations = new Map();
+      if(value.syncPack)for(const entry of value.packManifest.files){const key=entry.path.toLowerCase();const collision=records.find(r=>!value.records.some(v=>v.projectId===r.projectId)&&r.files.some(f=>f.toLowerCase()===key));if(collision)throw new Error(`File conflicts with ${collision.title}; existing files were preserved.`);}
       for (let i = 0; i < value.files.length; i++) {
         const file = value.files[i], name = safePath(file.path), key = name.toLowerCase();
         if (destinations.has(key)) throw new Error('Projects contain conflicting filenames.');
@@ -214,23 +259,25 @@ function createContent({ directory, library, api, fetcher = fetch, notify = () =
         if (collision) throw new Error(`File conflicts with ${collision.title}; existing files were preserved.`);
         const owner = value.records.find(r => r.files.includes(name));
         const dest = path.join(stage, 'game', name + (owner?.enabled === false ? '.disabled' : ''));
-        try { await fs.access(dest); throw new Error(`Refusing to overwrite an untracked file: ${name}`); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+        try { await fs.access(dest); if(value.syncPack&&!/^(mods|resourcepacks|shaderpacks)\//.test(name))continue;throw new Error(`Refusing to overwrite an untracked file: ${name}`); } catch (error) { if (error.code !== 'ENOENT') throw error; }
         notify({ state: 'downloading', completed: i, total: value.files.length, file: name });
         await download(file, dest, fetcher);
       }
       if (value.isPack) {
         for (const folder of ['overrides', 'client-overrides']) {
           const source = path.join(value.extracted, folder);
-          try { await fs.access(source); await fs.cp(source, path.join(stage, 'game'), { recursive: true, force: true }); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+          try { await fs.access(source); if(!value.syncPack)await fs.cp(source, path.join(stage, 'game'), { recursive: true, force: true });else for(const entry of value.packManifest.files.filter(f=>f.hashes.sha256)){const from=path.join(source,entry.path),to=path.join(stage,'game',entry.path);try{await fs.access(from);if(!await matchesFile(from,entry.hashes))continue;await fs.mkdir(path.dirname(to),{recursive:true});if(!/^(mods|resourcepacks|shaderpacks)\//.test(entry.path)){try{await fs.access(to);continue;}catch(error){if(error.code!=='ENOENT')throw error;}}if(/^(mods|resourcepacks|shaderpacks)\//.test(entry.path)){try{await fs.access(to);throw new Error(`Refusing to overwrite an untracked file: ${entry.path}`);}catch(error){if(error.code!=='ENOENT')throw error;}}await fs.copyFile(from,to);}catch(error){if(error.code!=='ENOENT')throw error;}} } catch (error) { if (error.code !== 'ENOENT') throw error; }
         }
       }
       for (const record of value.records) if (records.some(old => old.projectId === record.projectId && old.explicit)) record.explicit = true;
       records = records.filter(r => !value.records.some(v => v.projectId === r.projectId)).concat(value.records);
       await fs.writeFile(path.join(stage, 'mml-content.json'), JSON.stringify(records, null, 2));
       await fs.writeFile(path.join(stage, 'instance.json'), JSON.stringify(value.profile, null, 2));
+      if(value.packManifest)await fs.writeFile(path.join(stage,'mml-pack.json'),JSON.stringify(value.packManifest,null,2));
       try { await fs.rename(target, backup); moved = true; } catch (error) { if (error.code !== 'ENOENT') throw error; }
       await fs.rename(stage, target); committed = true;
-      if (value.isPack) await library.add(value.profile);
+      if (value.isPack&&!value.syncPack) await library.add(value.profile);
+      if(value.syncPack)await library.update(value.profile.id,{loaderVersion:value.profile.loaderVersion});
       if (moved) await fs.rm(backup, { recursive: true, force: true }).catch(() => {});
       plans.delete(value.id); await fs.rm(value.work, { recursive: true, force: true }).catch(() => {});
       notify({ state: 'complete', completed: value.files.length, total: value.files.length });
@@ -248,6 +295,8 @@ function createContent({ directory, library, api, fetcher = fetch, notify = () =
     try {
       await recover(instanceId);
       const records = await read(instanceId), record = records.find(r => r.projectId === projectId);
+      const profile=(await library.list()).find(p=>p.id===instanceId);
+      if(profile?.source&&profile.packUpdates!==false&&packMembers(records).has(projectId))throw new Error('This mod is managed by the linked modpack. Unlink the instance to change it.');
       if (!record || record.type !== 'mod') throw new Error('Only installed mods can be toggled.');
       if ((record.enabled !== false) === enabled) return records;
       await assertNoLinks(instancePath(instanceId));
@@ -263,6 +312,19 @@ function createContent({ directory, library, api, fetcher = fetch, notify = () =
     } catch(error) { for(const [from,to] of moved.reverse()) await fs.rename(to,from); throw error; }
     finally { busy = false; }
   }
-  return { plan: async input => { if (busy) throw new Error('Wait for the current installation preview or download to finish.'); busy = true; try { return await plan(input); } finally { busy = false; } }, install, read, toggle, isBusy: () => busy, instancePath, recover, directory };
+  const lockedPlan=async input=>{if(busy)throw new Error('Wait for the current installation preview or download to finish.');busy=true;try{return await plan(input);}finally{busy=false;}};
+  async function syncPack(id){
+    const profile=(await library.list()).find(p=>p.id===id);if(!profile)throw new Error('Instance not found.');if(!profile.source||profile.packUpdates===false)return {linked:false,profiles:await library.list(),contents:await read(id)};
+    const records=await read(id),root=records.find(r=>r.type==='modpack');if(!root)throw new Error('Linked modpack metadata is missing. Unlink this instance or reinstall its pack.');
+    const versions=newest(await api.versions(profile.source.id)),current=versions.find(v=>v.id===root.versionId);
+    const latest=versions.find(v=>v.version_type==='release'&&v.game_versions.includes(profile.gameVersion)&&v.loaders.includes(profile.loader)&&(!current||new Date(v.date_published)>=new Date(current.date_published)))||current;
+    if(!latest)throw new Error('The linked pack has no compatible version available.');
+    if(latest.id===root.versionId){try{const manifest=JSON.parse(await fs.readFile(path.join(instancePath(id),'mml-pack.json'),'utf8'));let valid=manifest.versionId===root.versionId;
+      for(const file of manifest.files.filter(f=>/^(mods|resourcepacks|shaderpacks)\//.test(f.path)))if(!await matchesFile(path.join(instancePath(id),'game',safePath(file.path)),file.hashes)){valid=false;break;}
+      if(valid)return {linked:true,changed:false,profiles:await library.list(),contents:records};
+    }catch(error){if(error.code!=='ENOENT')throw error;}}
+    const preview=await lockedPlan({projectId:profile.source.id,instanceId:id,syncPack:true});const result=await install({planId:preview.planId});return {...result,linked:true,changed:true};
+  }
+  return { plan:lockedPlan, install, syncPack, read, toggle, isBusy: () => busy, instancePath, recover, directory };
 }
-module.exports = { createContent, compatible, graph, safePath, allowedDownload, download, unzip };
+module.exports = { createContent, compatible, graph, packMembers, safePath, allowedDownload, download, unzip };

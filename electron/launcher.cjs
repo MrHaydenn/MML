@@ -99,9 +99,10 @@ function createLauncher({ directory, library, content, accounts, notify = () => 
     if(content.isBusy()) throw new Error('Wait for content installation to finish.');
     preparing=id; let session;
     try {
-      const profile=(await library.list()).find(p=>p.id===id); if(!profile) throw new Error('Instance not found.');
+      let profile=(await library.list()).find(p=>p.id===id); if(!profile) throw new Error('Instance not found.');
       if(profile.syncSettings && [...running.values()].some(r=>r.syncSettings)) throw new Error('Only one instance with shared settings can run at a time.');
       status(id,{state:'preparing',message:'Checking your Minecraft account…'}); session=await accounts.launchSession();
+      if(profile.source&&profile.packUpdates!==false&&content.syncPack){status(id,{state:'preparing',message:'Checking and matching linked modpack files…'});await content.syncPack(id);profile=(await library.list()).find(p=>p.id===id);}
       const prepared=await prepare(profile), game=path.join(content.instancePath(id),'game');
       await fs.mkdir(game,{recursive:true});
       if((await fs.lstat(content.instancePath(id))).isSymbolicLink() || (await fs.lstat(game)).isSymbolicLink()) throw new Error('Cannot launch an instance through a linked folder.');
