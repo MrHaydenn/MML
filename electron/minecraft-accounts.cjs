@@ -51,6 +51,7 @@ function createMinecraftAccounts({ directory, safeStorage, fetcher = fetch, clie
   async function exclusive(fn) { if (busy) throw new Error('An account operation is already running.'); busy = true; try { return await fn(); } finally { busy = false; } }
   return {
     state,
+    cacheProfile: profile=>exclusive(async()=>{const account=data.accounts.find(a=>a.id===profile.id);if(!account)throw new Error('Minecraft account changed.');const before=account.skinUrl;account.skinUrl=profileSkin(profile);try{await save();}catch(error){account.skinUrl=before;throw error;}return state();}),
     launchSession: () => exclusive(async () => {
       let account = data.accounts.find(a => a.id === data.active);
       if (!account) throw new Error('Sign into a Minecraft Java account before playing.');

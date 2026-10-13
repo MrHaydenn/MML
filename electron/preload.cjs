@@ -49,5 +49,12 @@ contextBridge.exposeInMainWorld('mml', {
     ipcRenderer.on('updates:status', listener);
     return () => ipcRenderer.removeListener('updates:status', listener);
   },
+  skinLibrary: id=>ipcRenderer.invoke('skins:list',id),
+  saveSkin: input=>ipcRenderer.invoke('skins:save',input),
+  removeSkin: input=>ipcRenderer.invoke('skins:remove',input),
+  skinProfile: id=>ipcRenderer.invoke('skins:profile',id),
+  skinTexture: url=>ipcRenderer.invoke('skins:texture',url),
+  applySkin: input=>ipcRenderer.invoke('skins:apply',input),
+  applyCape: input=>ipcRenderer.invoke('skins:cape',input),
   platform: 'windows'
 });

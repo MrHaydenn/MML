@@ -21,7 +21,7 @@ async function page(t) {
     return { ok: true, json: async () => data };
   };
   const context = dom.getInternalVMContext();
-  for (const file of ['vendor/marked.js', 'vendor/purify.js', 'discovery.js', 'instances.js', 'app.js']) new vm.Script(await fs.readFile(path.join(root, file), 'utf8'), { filename: file }).runInContext(context);
+  for (const file of ['vendor/marked.js', 'vendor/purify.js', 'discovery.js', 'instances.js', 'skins.js', 'app.js']) new vm.Script(await fs.readFile(path.join(root, file), 'utf8'), { filename: file }).runInContext(context);
   await tick(); await tick();
   dom.window.document.querySelector('#continue-local').click();
   return { dom, doc: dom.window.document, calls };
@@ -56,7 +56,7 @@ test('Minecraft accounts are accessible from the bottom-left and browser preview
   assert.equal(doc.querySelector('#accounts-page').hidden, false);
   assert.equal(doc.querySelector('#minecraft-add').disabled, true);
   assert.match(doc.querySelector('#minecraft-error').textContent, /Windows application/);
-  assert.match(doc.querySelector('#library-list').textContent, /LATEST VANILLA/);
+  assert.match(doc.querySelector('#library-list').textContent, /Latest release/);
 });
 
 test('workspace sign-in only submits existing-account credentials and clears the password', async t => {
@@ -97,11 +97,23 @@ test('instance content browser fixes its target, filters compatible mods, and in
   dom.window.openInstanceDiscovery(id);doc.querySelector('[data-type="resourcepack"]').click();await tick();assert.equal(calls.filter(c=>c.method==='search').at(-1).value.loader,'');
   doc.querySelector('[data-page="discover"]').click();await tick();assert.equal(doc.querySelector('[data-type="modpack"]').hidden,false);assert(doc.querySelector('[data-type="modpack"]').classList.contains('selected'));
 });
-test('linked modpack content is separate and locked; Servers and MMSM pairing are absent',async t=>{
+test('linked modpack content is separate and can be disabled; Servers and MMSM pairing are absent',async t=>{
   const {dom,doc}=await page(t);
   assert.equal(doc.querySelector('[data-page="hosting"]'),null);assert.equal(doc.querySelector('#hosting-page'),null);assert.equal(doc.querySelector('#instance-token'),null);
   dom.window.eval("state.profiles[0].source={id:'pack',title:'Example pack'};state.profiles[0].packUpdates=true");
   dom.window.mml={installedContent:async()=>[{projectId:'pack',title:'Example pack',type:'modpack',version:'1.0',dependencies:['bundled'],files:[]},{projectId:'bundled',title:'Bundled mod',type:'mod',version:'1.0',files:['mods/bundled.jar']},{projectId:'extra',title:'Extra mod',type:'mod',version:'2.0',files:['mods/extra.jar']}]};
   await dom.window.showInstance('default-vanilla');assert.match(doc.querySelector('.instance-content-heading').textContent,/Additional content/);assert.equal(doc.querySelector('[data-toggle-mod="bundled"]'),null);assert(doc.querySelector('[data-toggle-mod="extra"]'));
-  doc.querySelector('[data-pack-expand]').click();assert.match(doc.querySelector('.linked-pack').textContent,/Bundled mod/);assert.match(doc.querySelector('.linked-pack').textContent,/Locked/);assert.equal(doc.querySelector('[data-toggle-mod="bundled"]'),null);
+  doc.querySelector('[data-pack-expand]').click();assert.match(doc.querySelector('.linked-pack').textContent,/Bundled mod/);assert(doc.querySelector('.linked-pack [data-toggle-mod="bundled"]'));
+});
+
+test('Library is the startup page; archiving moves and restores tiles without losing the instance',async t=>{
+ const {dom,doc}=await page(t);assert.equal(doc.querySelector('#library-page').hidden,false);assert.equal(doc.querySelector('#discover-page').hidden,true);
+ dom.window.mml={updateInstance:async(id,settings)=>[{id,name:'Latest Minecraft',gameVersion:'1.21.1',loader:'vanilla',autoUpdate:true,...settings}]};
+ doc.querySelector('[data-archive]').click();await tick();assert.equal(doc.querySelector('#library-list .instance-tile'),null);assert(doc.querySelector('#archived-list .instance-tile'));assert.equal(doc.querySelector('#archived-section').hidden,false);
+ doc.querySelector('#archived-list [data-archive]').click();await tick();assert(doc.querySelector('#library-list .instance-tile'));assert.equal(doc.querySelector('#archived-section').hidden,true);
+});
+test('pack versions and additional update buttons are shown independently',async t=>{
+ const {dom,doc}=await page(t);dom.window.eval("state.profiles[0].source={id:'pack',title:'Pack'};state.profiles[0].packUpdates=true");
+ dom.window.mml={installedContent:async()=>[{projectId:'pack',type:'modpack',title:'Pack',versionId:'p1',version:'1',dependencies:[],files:[]},{projectId:'extra',type:'mod',title:'Extra',version:'1',files:[]}],instanceUpdates:async()=>({available:true,latest:'Pack 2',latestId:'p2',additional:[{projectId:'extra',versionId:'e2',version:'Extra 2'}],versions:[{id:'p1',name:'Pack 1',type:'release',gameVersions:['1.21.1'],loaders:['fabric']},{id:'p2',name:'Pack 2',type:'release',gameVersions:['1.21.1'],loaders:['fabric']}]})};
+ await dom.window.showInstance('default-vanilla');assert(doc.querySelector('[data-pack-update="p2"]'));assert(doc.querySelector('[data-content-update="extra"]'));doc.querySelector('[data-instance-tab="versions"]').click();assert.match(doc.querySelector('#instance-page').textContent,/Switch version/);assert(doc.querySelector('[data-pack-update="p1"]').disabled);
 });

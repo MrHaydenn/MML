@@ -9,6 +9,7 @@ const { createUpdater } = require('./updater.cjs');
 const { autoUpdater } = require('electron-updater');
 const { createContent } = require('./content.cjs');
 const { createMinecraftAccounts } = require('./minecraft-accounts.cjs');
+const { createSkins } = require('./skins.cjs');
 const { createLauncher } = require('./launcher.cjs');
 const page = path.join(__dirname, '../src/index.html');
 let window;
@@ -43,13 +44,7 @@ app.whenReady().then(() => {
   handle('content:list', id => content.read(id));
   handle('content:toggle', input => { launcher.guard(input.instanceId); return content.toggle(input); });
   handle('instance:syncPack', async id=>{launcher.guard(id);return content.syncPack(id);});
-  handle('instance:updates', async id => {
-    const profile=(await library.list()).find(p=>p.id===id);if(!profile) throw new Error('Instance not found.');
-    if(!profile.source || profile.packUpdates===false) return {following:false};
-    const records=await content.read(id), current=records.find(r=>r.type==='modpack'&&r.projectId===profile.source.id);
-    const versions=(await api.versions(profile.source.id)).sort((a,b)=>new Date(b.date_published)-new Date(a.date_published));
-    return {following:true,available:Boolean(current&&versions[0]&&versions[0].id!==current.versionId),latest:versions[0]?.name};
-  });
+  handle('instance:updates',id=>content.checkUpdates(id));
   handle('content:open', async id => {
     if (!(await library.list()).some(p => p.id === id)) throw new Error('Instance not found.');
     const folder = path.join(content.instancePath(id), 'game'); await fs.mkdir(folder, { recursive: true });
@@ -81,6 +76,8 @@ app.whenReady().then(() => {
   minecraftReady.catch(() => {});
   for (const action of ['state', 'configure', 'poll', 'cancel', 'activate', 'remove', 'refresh']) handle(`minecraft:${action}`, async input => { await minecraftReady; return minecraft[action](input); });
   handle('minecraft:begin', async () => { await minecraftReady; const result=await minecraft.begin(); clipboard.writeText(result.userCode); return result; });
+  const skins=createSkins({directory:path.join(app.getPath('userData'),'skins'),accounts:minecraft});
+  for(const method of ['list','save','remove','profile','texture','apply','cape'])handle('skins:'+method,async input=>{await minecraftReady;return skins[method](input);});
   launcher=createLauncher({directory:app.getPath('userData'),library,content,accounts:minecraft,notify:status=>{if(!window.isDestroyed())window.webContents.send('launcher:status',status);}});
   handle('launcher:play',async id=>{await libraryReady;await minecraftReady;return launcher.play(id);});
   handle('launcher:stop',id=>launcher.stop(id));
@@ -99,7 +96,7 @@ app.whenReady().then(() => {
   handle('updates:channel', async value => { await updateReady; return updater.channel(value); });
   handle('updates:check', async () => { await updateReady; return updater.check(); });
   handle('updates:download', () => updater.download());
-  handle('updates:install', () => updater.install());
+  handle('updates:install', () => {if(launcher.anyActive())throw new Error('Stop Minecraft before restarting MML to update.');return updater.install();});
   window.webContents.once('did-finish-load', () => {
     updateReady.then(() => updater.check()).catch(() => {});
   });

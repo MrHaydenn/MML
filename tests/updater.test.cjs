@@ -22,15 +22,15 @@ test('stable is default, downloads require a check and install requires a verifi
   const { engine, updater } = await fixture(t);
   assert.equal(engine.feed.url, feeds.stable);
   assert.equal(engine.allowPrerelease, false);
-  assert.equal(engine.autoDownload, false);
-  assert.equal(engine.autoInstallOnAppQuit, false);
+  assert.equal(engine.autoDownload, true);
+  assert.equal(engine.autoInstallOnAppQuit, true);
   assert.throws(() => updater.install(), /Download/);
   assert.equal((await updater.check()).status, 'available');
   assert.throws(() => updater.install(), /Download/);
   assert.equal((await updater.download()).status, 'ready');
   await assert.rejects(updater.channel('experimental'), /Finish/);
   updater.install();
-  assert.deepEqual(engine.installed, [false, true]);
+  assert.deepEqual(engine.installed, [true, true]);
 });
 test('experimental selection persists and returning to stable permits leaving a prerelease', async t => {
   const { engine, updater, directory } = await fixture(t, '0.3.1-experimental.10');

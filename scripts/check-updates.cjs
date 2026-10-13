@@ -25,10 +25,15 @@ app.whenReady().then(async () => {
       const updater = createUpdater({ engine, directory: path.join(directory, channel + '-prefs'), version: '0.0.0', packaged: true });
       await updater.initialize();
       await updater.channel(channel);
+      // This diagnostic must never install an update when Electron quits.
+      engine.autoInstallOnAppQuit=false;
+      engine.quitAndInstall=()=>{throw new Error('Diagnostic cannot run an installer.');};
+      let timer;const completed=new Promise((resolve,reject)=>{timer=setTimeout(()=>reject(new Error('Update download timed out')),120000);engine.once('update-downloaded',resolve);engine.once('error',reject);});
       const found = await updater.check();
-      assert.equal(found.status, 'available', JSON.stringify(found));
+      assert(['available','downloading','ready'].includes(found.status), JSON.stringify(found));
       assert.equal(found.latest.includes('-experimental.'), channel === 'experimental');
-      const downloaded = await updater.download();
+      try{await completed;}finally{clearTimeout(timer);}
+      const downloaded = updater.state();
       assert.equal(downloaded.status, 'ready', JSON.stringify(downloaded));
       assert((await fs.stat(engine.installerPath)).size > 1000000);
       console.log(`Verified real GitHub ${channel} feed, installer download and SHA-512: ${found.latest}`);

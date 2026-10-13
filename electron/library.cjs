@@ -1,5 +1,6 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { PNG } = require('pngjs');
 const { randomUUID } = require('node:crypto');
 
 function validateProfile(input) {
@@ -43,7 +44,9 @@ function createLibrary(directory) {
       if (input.name !== undefined) { if (typeof input.name !== 'string' || !input.name.trim() || input.name.trim().length > 60) throw new Error('Choose a name between 1 and 60 characters.'); profile.name = input.name.trim(); }
       if (input.memoryMb !== undefined) { if (!Number.isInteger(input.memoryMb) || input.memoryMb < 1024 || input.memoryMb > 32768) throw new Error('Memory must be between 1024 and 32768 MB.'); profile.memoryMb = input.memoryMb; }
       if(input.loaderVersion!==undefined){if(input.loaderVersion!==null&&!/^[a-zA-Z0-9.+_-]{1,100}$/.test(input.loaderVersion))throw new Error('Invalid loader version.');profile.loaderVersion=input.loaderVersion;}
-      for (const key of ['syncSettings', 'packUpdates']) if (input[key] !== undefined) { if (typeof input[key] !== 'boolean') throw new Error('Invalid instance setting.'); profile[key] = input[key]; }
+      for (const key of ['syncSettings', 'packUpdates', 'archived']) if (input[key] !== undefined) { if (typeof input[key] !== 'boolean') throw new Error('Invalid instance setting.'); profile[key] = input[key]; }
+      if(input.gameVersion!==undefined||input.loader!==undefined){const checked=validateProfile({...profile,...input});profile.gameVersion=checked.gameVersion;profile.loader=checked.loader;}
+      if(input.iconData!==undefined){if(input.iconData!==null&&(typeof input.iconData!=='string'||input.iconData.length>400000||!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(input.iconData)))throw new Error('Choose a valid PNG instance icon.');if(input.iconData){const bytes=Buffer.from(input.iconData.split(',')[1],'base64');if(bytes.length<24||bytes.readUInt32BE(16)>256||bytes.readUInt32BE(20)>256)throw new Error('Instance icons must be at most 256 × 256.');try{PNG.sync.read(bytes);}catch{throw new Error('The instance icon PNG could not be read.');}}profile.iconData=input.iconData;}
       if (typeof input.iconUrl === 'string' && /^https:\/\/cdn\.modrinth\.com\//.test(input.iconUrl)) profile.iconUrl = input.iconUrl;
       return profiles;
     }),

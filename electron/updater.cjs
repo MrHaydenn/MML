@@ -13,8 +13,8 @@ function createUpdater({ engine, directory, version, packaged, notify = () => {}
   const snapshot = () => ({ ...state });
   const update = values => { state = { ...state, ...values }; notify(snapshot()); };
   function configure() {
-    engine.autoDownload = false;
-    engine.autoInstallOnAppQuit = false;
+    engine.autoDownload = true;
+    engine.autoInstallOnAppQuit = true;
     engine.disableWebInstaller = true;
     engine.allowPrerelease = state.channel === 'experimental';
     engine.channel = state.channel === 'stable' ? 'latest' : 'experimental';
@@ -60,7 +60,7 @@ function createUpdater({ engine, directory, version, packaged, notify = () => {}
     }),
     install() {
       if (!packaged || busy || state.status !== 'ready') throw new Error('Download and verify an update first.');
-      engine.quitAndInstall(false, true);
+      engine.quitAndInstall(true, true);
     }
   };
 }

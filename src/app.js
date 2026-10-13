@@ -3,7 +3,7 @@ const $$ = selector => [...document.querySelectorAll(selector)];
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const compact = number => new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(number || 0);
 const labels = { modpack: 'Modpack', mod: 'Mod', resourcepack: 'Resource pack', shader: 'Shader' };
-const state = { type: 'modpack', offset: 0, total: 0, request: 0, details: 0, profiles: [], versions: [], source: null, page: 'discover' };
+const state = { type: 'modpack', offset: 0, total: 0, request: 0, details: 0, profiles: [], versions: [], source: null, page: 'library' };
 let toastTimer, searchTimer;
 let account = { connected: false };
 // The browser preview uses the same backend modules through a loopback development server.
@@ -27,10 +27,11 @@ function toast(message) {
 }
 function showPage(page) {
   state.page = page;
-  for (const name of ['discover', 'library', 'settings', 'project', 'accounts', 'instance']) $(`#${name}-page`).hidden = page !== name;
+  for (const name of ['discover', 'library', 'settings', 'project', 'accounts', 'instance', 'skins']) $(`#${name}-page`).hidden = page !== name;
   $$('[data-page]').forEach(button => button.classList.toggle('active', button.dataset.page === page));
-  $('#breadcrumb').textContent = `Workspace / ${page === 'library' ? 'My library' : page === 'settings' ? 'Settings & about' : 'Discover'}`;
+  $('#breadcrumb').textContent = `Workspace / ${page === 'library' ? 'My library' : page === 'settings' ? 'Settings & about' : page==='skins'?'Skin editor':'Discover'}`;
   if (page === 'library') renderLibrary();
+  if(page==='skins')openSkins();else if(typeof disposeSkinPreview==='function')disposeSkinPreview();
   if (page === 'accounts') loadMinecraftAccounts();
   window.scrollTo({ top: 0 });
  
@@ -44,7 +45,7 @@ function renderAccount(value) {
 }
 
 function enterWorkspace() {
-  $('#signin-screen').hidden = true; document.body.classList.remove('signing-in');
+  $('#signin-screen').hidden = true; document.body.classList.remove('signing-in');showPage('library');
 }
 
 function showSignin() {
@@ -75,7 +76,7 @@ $('#signin-form').onsubmit = async event => {
   const password = $('#shared-password').value; $('#shared-password').value = '';
   try {
     renderAccount(await window.mml.connectAccount({ username: $('#shared-username').value.trim(), password }));
-    enterWorkspace(); showPage('discover'); toast(`Welcome, ${account.user.username}.`);
+    enterWorkspace(); showPage('library'); toast(`Welcome, ${account.user.username}.`);
   } catch (error) { $('#signin-error').textContent = error.message; }
   finally { $('#signin-submit').disabled = false; }
 };
@@ -86,10 +87,10 @@ async function restoreAccount() {
   $('#signin-submit').disabled = true;
   try {
     renderAccount(await window.mml.restoreAccount());
-    if (account.connected) enterWorkspace();
+
   } catch (error) {
     renderAccount(await window.mml.accountState());
-    if (account.connected) { enterWorkspace(); toast(error.message); }
+    if (account.connected) { toast(error.message); }
     else $('#signin-error').textContent = error.message;
   } finally { $('#signin-submit').disabled = false; }
 }
@@ -146,7 +147,8 @@ $('#create-form').onsubmit = async event => {
   } catch (error) { $('#form-error').textContent = error.message; }
   finally { $('#save-profile').disabled = false; }
 };
-$('#library-list').onclick = async event => {
+$('#library-page').onclick = async event => {
+  const archive=event.target.closest('[data-archive]');if(archive){try{const p=state.profiles.find(p=>p.id===archive.dataset.archive);state.profiles=await window.mml.updateInstance(p.id,{archived:!p.archived});renderLibrary();}catch(error){toast(error.message);}return;}
   const play=event.target.closest('[data-play]');if(play)return playInstance(play.dataset.play);
   const stop=event.target.closest('[data-stop]');if(stop)return stopInstance(stop.dataset.stop);
   const content = event.target.closest('[data-content]'); if (content) return showInstance(content.dataset.content);
@@ -160,11 +162,12 @@ $('#open-library').onclick = () => api.openLibrary().catch(error => toast(error.
 document.addEventListener('keydown', event => { if (event.ctrlKey && event.key.toLowerCase() === 'k' && !document.querySelector('dialog[open]')) { event.preventDefault(); showPage('discover'); $('#search').focus(); } });
 api.library().then(profiles => { state.profiles = profiles; renderLibrary(); }).catch(error => toast(error.message));
 loadVersions(); search();
+enterWorkspace();
 restoreAccount();
 
 function renderUpdate(status) {
-  $('#app-version').textContent = status.current || '0.6.0';
-  $('#update-current').textContent = `Installed: MML ${status.current || '0.6.0'}`;
+  $('#app-version').textContent = status.current || '0.7.0';
+  $('#update-current').textContent = `Installed: MML ${status.current || '0.7.0'}`;
   $('#update-channel').value = status.channel;
   $('#update-status').textContent = status.message;
   const working = ['checking', 'downloading'].includes(status.status);
@@ -172,24 +175,27 @@ function renderUpdate(status) {
   $('#update-check').disabled = working || status.status === 'ready' || !window.mml;
   $('#update-download').hidden = status.status !== 'available';
   $('#update-install').hidden = status.status !== 'ready';
+  $('#restart-update').hidden=status.status!=='ready';
   $('#update-progress').hidden = status.status !== 'downloading';
   $('#update-progress').value = status.progress || 0;
 }
 async function updateAction(action) {
   try { const status = await action(); if (status) renderUpdate(status); }
-  catch (error) { $('#update-status').textContent = error.message; }
+  catch (error) { $('#update-status').textContent = error.message;toast(error.message); }
 }
 $('#update-channel').onchange = () => updateAction(async () => { await window.mml.updateChannel($('#update-channel').value); return window.mml.checkUpdates(); });
 $('#update-check').onclick = () => updateAction(() => window.mml.checkUpdates());
 $('#update-download').onclick = () => updateAction(() => window.mml.downloadUpdate());
+$('#restart-update').onclick=()=>updateAction(()=>window.mml.installUpdate());
 $('#update-install').onclick = () => updateAction(() => window.mml.installUpdate());
 if (window.mml) {
   window.mml.onUpdateStatus(status => {
     renderUpdate(status);
-    if (status.status === 'available') toast(`MML ${status.latest} is available. Open Settings to update.`);
+    if (status.status === 'available') toast(`MML ${status.latest} is available. Downloading in the background.`);
   });
   updateAction(() => window.mml.updateState());
-} else renderUpdate({ channel: 'stable', current: '0.6.0', status: 'development', message: 'Install the Windows application to check for and install updates.' });
+} else renderUpdate({ channel: 'stable', current: '0.7.0', status: 'development', message: 'Install the Windows application to check for and install updates.' });
 
 initializeInstances();
 initializeDiscovery();
+initializeSkins();

@@ -4,7 +4,7 @@ The account server is a separate **Haydenn Accounts** project deployed on your W
 MML signs into accounts.mrhaydenn.us with an existing Haydenn Accounts username and password.
 Minecraft accounts are connected separately through Microsoft.
 
-A Windows-first Minecraft modpack workspace. **Working title · 0.6.0 instance and game-launch preview.**
+A Windows-first Minecraft modpack workspace. **Working title · 0.7.0 instance and game-launch preview.**
 
 An original charcoal, olive, and amber interface with a familiar launcher structure: discovery, your library, and profile creation.
 
@@ -73,7 +73,7 @@ MML is independent of Modrinth, Mojang, and Microsoft. Project names, icons, and
 
 ## Install and update
 
-Download the EXE from the latest Stable GitHub release, run it, and start MML from its desktop shortcut or Start menu entry. The installed application checks for updates on startup. Open the bottom-left Settings gear to check again, download an update with progress, and restart to install. Downloads are checked against the published SHA-512 checksum. Local profiles and encrypted account sessions remain in your Windows app data directory.
+Download the EXE from the latest Stable GitHub release, run it, and start MML from its desktop shortcut or Start menu entry. The installed application checks for and downloads updates on startup. Open the bottom-left Settings gear to check again, view download progress and restart to install. Downloads are checked against the published SHA-512 checksum. Local profiles and encrypted account sessions remain in your Windows app data directory.
 
 **Stable** is selected by default and reads only GitHub’s latest published stable release. **Experimental** is opt-in and reads the latest successfully built push to `main`; failed or unfinished builds are never offered. Returning to Stable can replace a newer experimental build with the latest stable release. Normal pushes publish only the experimental prerelease; changing `release-request.json` to match the package version explicitly requests a stable release.
 
@@ -94,4 +94,18 @@ Mod toggles rename tracked JAR files with a .disabled suffix and retain dependen
 
 The pinned XMCL dependencies include two narrow published-package fixes under patches/: the unzip entry point and the installer's missing private utility import. pnpm applies these through pnpm-workspace.yaml on every clean install.
 
-Add content from an instance opens Mods, Resource packs and Shaders scoped to that instance. Compatible installs go straight into it. Linked pack content is grouped above additional content and cannot be toggled independently. Sync now and Play match it to the latest release for the same Minecraft version and loader. Additional content and edited configuration files are preserved; conflicting additional dependencies stop the update. Unlink in instance Settings to manage pack mods yourself. MMSM integration is removed for now; Haydenn Accounts sign-in remains.
+Add content from an instance opens Mods, Resource packs and Shaders scoped to that instance. Linked pack content is grouped above additional content. It is checked on opening an instance and every five minutes while viewing it, with cached checks to limit API requests. Updates are offered explicitly, including newer Minecraft/loader versions; switching versions asks for confirmation when additional content is installed or game components change. Additional content files remain unchanged. Conflicting dependencies or file overlaps stop the update. Play verifies the installed pack rather than automatically upgrading it.
+
+Pack mods can be disabled while linked. An unchanged mod version retains its enabled state; replacement versions may be enabled again. Mods included as bundled JARs are also tracked. Compatible release updates for additional mods, resource packs and shaders have their own update buttons. Mod compatibility still needs verification after a pack changes Minecraft or its loader.
+
+Library opens on startup, including without Haydenn Accounts sign-in. Archive keeps an instance and its files under Archived at the bottom; Restore brings it back. Tiles use a consistent 240-pixel square. Instance Settings supports a local custom image and resetting to the pack/default icon.
+
+## Skins and capes
+
+Skin editor below Library saves a separate local PNG library for each connected Minecraft UUID. Upload 64 × 64 or legacy 64 × 32 skins, select classic/slim arms, or create a new skin. The simple texture editor supports pencil, eraser, eyedropper, pixel grid, undo and redo. A bundled skinview3d viewer provides a rotating, draggable 3D preview with zoom and owned-cape preview. Skins are not synchronized through Haydenn Accounts.
+
+Apply sends the saved PNG to Minecraft Services using the selected account’s internal session. It changes the actual Minecraft Java skin, not just the launcher preview. Owned capes are retrieved from the authenticated profile and can be selected or hidden. The launcher never accepts arbitrary cape uploads. Rejoining a server or restarting Minecraft may be needed to see the change. Skin and cape mutations require a valid Minecraft session and can be rejected or rate-limited by Minecraft.
+
+## Seamless Windows updates
+
+Updates download and verify in the background for the selected channel. Restart to update appears in the title bar when ready and uses silent installation, then reopens MML. Closing MML also installs a downloaded update for the next launch. New installations are per-user and do not offer all-users or elevated installation. A legacy all-users installation or Windows security policy can still require approval during migration; first installation remains unsigned. MML 0.6 and older use their existing interactive update flow once to obtain this version.
