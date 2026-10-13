@@ -70,12 +70,12 @@ function renderAccount(value) {
   account = value;
   $('#account-name').textContent = value.connected ? value.user.username : 'Local workspace';
   $('#account-avatar').textContent = value.connected ? value.user.username.charAt(0).toUpperCase() : 'M';
-  $('#account-instance').textContent = value.connected ? new URL(value.instanceUrl).host : 'Connect an MMSM account';
-  $('#hosting-origin').textContent = value.connected ? new URL(value.instanceUrl).host : 'No MMSM instance connected';
+  $('#account-instance').textContent = value.connected ? new URL(value.instanceUrl || value.serviceUrl).host : 'Sign in to Haydenn Accounts';
+  $('#hosting-origin').textContent = value.instanceUrl ? new URL(value.instanceUrl).host : 'No MMSM instance connected';
   $('#hosting-account').textContent = value.connected ? `Signed in as ${value.user.username} · ${value.user.role}` : 'Your MMSM server workspace';
-  $('#hosting-connect').hidden = value.connected;
-  $('#hosting-external').disabled = !value.connected;
-  $('#hosting-reload').disabled = !value.connected;
+  $('#hosting-connect').hidden = !!value.instanceUrl;
+  $('#hosting-external').disabled = !value.instanceUrl;
+  $('#hosting-reload').disabled = !value.instanceUrl;
 }
 
 function enterWorkspace() {
@@ -83,8 +83,8 @@ function enterWorkspace() {
 }
 
 function showSignin() {
-  $('#signin-error').textContent = ''; $('#instance-token').value = '';
-  $('#signin-screen').hidden = false; document.body.classList.add('signing-in'); updateHostingLayout(); $('#instance-url').focus();
+  $('#signin-error').textContent = ''; $('#shared-password').value = '';
+  $('#signin-screen').hidden = false; document.body.classList.add('signing-in'); updateHostingLayout(); $('#shared-username').focus();
 }
 
 $('#continue-local').onclick = enterWorkspace;
@@ -92,7 +92,7 @@ $('#hosting-connect').onclick = showSignin;
 $('#account-menu').onclick = () => {
   if (!account.connected) return showSignin();
   $('#signed-in-name').textContent = account.user.username;
-  $('#signed-in-instance').textContent = account.instanceUrl;
+  $('#signed-in-instance').textContent = account.instanceUrl || account.serviceUrl;
   $('#account-error').textContent = '';
   $('#account-dialog').showModal();
 };
@@ -107,12 +107,12 @@ $('#disconnect-account').onclick = async () => {
 };
 $('#signin-form').onsubmit = async event => {
   event.preventDefault(); $('#signin-error').textContent = '';
-  if (!window.mml) { $('#instance-token').value = ''; $('#signin-error').textContent = 'Account connections are available in the Windows app. This preview does not send or save tokens.'; return; }
+  if (!window.mml) { $('#shared-password').value = ''; $('#signin-error').textContent = 'Account connections are available in the Windows app. This preview does not send or save tokens.'; return; }
   $('#signin-submit').disabled = true;
-  const token = $('#instance-token').value; $('#instance-token').value = '';
+  const password = $('#shared-password').value; $('#shared-password').value = '';
   try {
-    renderAccount(await window.mml.connectAccount({ instanceUrl: $('#instance-url').value, token }));
-    enterWorkspace(); showPage('hosting'); toast(`Welcome, ${account.user.username}.`);
+    renderAccount(await window.mml.connectAccount({ username: $('#shared-username').value.trim(), password }));
+    enterWorkspace(); showPage(account.instanceUrl ? 'hosting' : 'discover'); toast(`Welcome, ${account.user.username}.`);
   } catch (error) { $('#signin-error').textContent = error.message; }
   finally { $('#signin-submit').disabled = false; }
 };

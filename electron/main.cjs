@@ -89,7 +89,7 @@ app.whenReady().then(() => {
   const account = createAccount({ directory: app.getPath('userData'), safeStorage, sessionFor: partition => session.fromPartition(partition) });
   const configureHosting = () => {
     const current = account.current();
-    if (current.connected) hosting.configure(current.instanceUrl, account.partition());
+    if (current.connected && current.instanceUrl) hosting.configure(current.instanceUrl, account.partition());
     else hosting.reset();
     return current;
   };
@@ -98,7 +98,7 @@ app.whenReady().then(() => {
   handle('account:connect', async input => { await account.connect(input); return configureHosting(); });
   handle('account:disconnect', async () => { hosting.reset(); await account.disconnect(); return configureHosting(); });
   const showHosting = async () => {
-    if (!account.current().connected) return { state: 'disconnected' };
+    if (!account.current().instanceUrl) return { state: 'disconnected' };
     hosting.reset();
     try { await account.refresh(); }
     finally { configureHosting(); }

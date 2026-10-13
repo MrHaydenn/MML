@@ -58,3 +58,14 @@ test('Minecraft accounts are accessible from the bottom-left and browser preview
   assert.match(doc.querySelector('#minecraft-error').textContent, /Windows application/);
   assert.match(doc.querySelector('#library-list').textContent, /LATEST VANILLA/);
 });
+
+test('workspace sign-in only submits existing-account credentials and clears the password', async t => {
+  const { dom, doc } = await page(t); let submitted;
+  assert.equal(doc.querySelector('#account-service-url'),null);
+  assert.equal(doc.querySelector('#instance-token'),null);
+  dom.window.mml={setHostingLayout(){},connectAccount:async input=>{submitted=input;return {connected:true,serviceUrl:'https://accounts.mrhaydenn.us',user:{id:'1',username:'MixedCase',role:'member'}};}};
+  doc.querySelector('#shared-username').value='MixedCase';doc.querySelector('#shared-password').value='test password';
+  await doc.querySelector('#signin-form').onsubmit({preventDefault(){}});
+  assert.equal(submitted.username,'MixedCase');assert.equal(submitted.password,'test password');assert.equal(Object.keys(submitted).length,2);
+  assert.equal(doc.querySelector('#shared-password').value,'');assert.equal(doc.querySelector('#signin-screen').hidden,true);
+});
