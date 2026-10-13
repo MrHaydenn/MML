@@ -1,6 +1,6 @@
 {
   "name": "mml",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "MrHaydenn's Minecraft Launcher — a Windows modpack workspace",
   "author": "MrHaydenn",
   "private": true,
@@ -52,6 +52,8 @@
     "jsdom": "^30.1.2"
   },
   "dependencies": {
+    "@xmcl/core": "^2.16.2",
+    "@xmcl/installer": "^6.3.5",
     "dompurify": "^3.4.16",
     "electron-updater": "^6.8.9",
     "marked": "^18.1.0",

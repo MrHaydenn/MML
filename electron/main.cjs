@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, shell, safeStorage, session } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, shell, safeStorage, session, clipboard } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
@@ -10,10 +10,12 @@ const { createUpdater } = require('./updater.cjs');
 const { autoUpdater } = require('electron-updater');
 const { createContent } = require('./content.cjs');
 const { createMinecraftAccounts } = require('./minecraft-accounts.cjs');
+const { createLauncher } = require('./launcher.cjs');
 const page = path.join(__dirname, '../src/index.html');
 let window;
 
 app.whenReady().then(() => {
+  let launcher;
   const api = createClient();
   const library = createLibrary(path.join(app.getPath('userData'), 'library'));
   const content = createContent({ directory: path.join(library.directory, 'instances'), library, api,
@@ -35,10 +37,19 @@ app.whenReady().then(() => {
   for (const method of ['search', 'project', 'versions', 'gameVersions']) handle(`modrinth:${method}`, input => api[method](input));
   handle('library:list', async () => { await libraryReady; return library.list(); });
   handle('library:create', async input => { await libraryReady; return library.create(input); });
-  handle('library:remove', async id => { await libraryReady; if (id === 'default-vanilla') throw new Error('The latest Vanilla instance is managed automatically.'); return library.remove(id); });
+  handle('library:remove', async id => { await libraryReady; launcher.guard(id); if (id === 'default-vanilla') throw new Error('The latest Vanilla instance is managed automatically.'); return library.remove(id); });
+  handle('library:update', async ({id,settings}) => { await libraryReady; launcher.guard(id); return library.update(id,settings); });
   handle('content:plan', async input => { await libraryReady; return content.plan(input); });
-  handle('content:install', input => content.install(input));
+  handle('content:install', input => { if (launcher.anyActive()) throw new Error('Stop Minecraft before installing content.'); return content.install(input); });
   handle('content:list', id => content.read(id));
+  handle('content:toggle', input => { launcher.guard(input.instanceId); return content.toggle(input); });
+  handle('instance:updates', async id => {
+    const profile=(await library.list()).find(p=>p.id===id);if(!profile) throw new Error('Instance not found.');
+    if(!profile.source || profile.packUpdates===false) return {following:false};
+    const records=await content.read(id), current=records.find(r=>r.type==='modpack'&&r.projectId===profile.source.id);
+    const versions=(await api.versions(profile.source.id)).sort((a,b)=>new Date(b.date_published)-new Date(a.date_published));
+    return {following:true,available:Boolean(current&&versions[0]&&versions[0].id!==current.versionId),latest:versions[0]?.name};
+  });
   handle('content:open', async id => {
     if (!(await library.list()).some(p => p.id === id)) throw new Error('Instance not found.');
     const folder = path.join(content.instancePath(id), 'game'); await fs.mkdir(folder, { recursive: true });
@@ -68,7 +79,13 @@ app.whenReady().then(() => {
   const minecraftReady = minecraft.initialize();
   // Preserve initialization errors for the Accounts screen without an unhandled rejection.
   minecraftReady.catch(() => {});
-  for (const action of ['state', 'configure', 'begin', 'poll', 'cancel', 'activate', 'remove', 'refresh']) handle(`minecraft:${action}`, async input => { await minecraftReady; return minecraft[action](input); });
+  for (const action of ['state', 'configure', 'poll', 'cancel', 'activate', 'remove', 'refresh']) handle(`minecraft:${action}`, async input => { await minecraftReady; return minecraft[action](input); });
+  handle('minecraft:begin', async () => { await minecraftReady; const result=await minecraft.begin(); clipboard.writeText(result.userCode); return result; });
+  launcher=createLauncher({directory:app.getPath('userData'),library,content,accounts:minecraft,notify:status=>{if(!window.isDestroyed())window.webContents.send('launcher:status',status);}});
+  handle('launcher:play',async id=>{await libraryReady;await minecraftReady;return launcher.play(id);});
+  handle('launcher:stop',id=>launcher.stop(id));
+  handle('launcher:state',()=>launcher.state());
+  handle('launcher:logs',id=>launcher.logs(id));
   handle('minecraft:openLogin', () => shell.openExternal('https://www.microsoft.com/link'));
   handle('project:link', value => {
     const url = new URL(value);

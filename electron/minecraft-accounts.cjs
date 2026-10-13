@@ -2,11 +2,15 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const OAUTH = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/';
 const SCOPE = 'XboxLive.signin offline_access';
+function profileSkin(profile) {
+  const skin = profile.skins?.find(s => s.state === 'ACTIVE') || profile.skins?.[0];
+  return /^https?:\/\/textures\.minecraft\.net\/texture\/[a-f0-9]+$/i.test(skin?.url || '') ? skin.url.replace(/^http:/i,'https:') : null;
+}
 
 function createMinecraftAccounts({ directory, safeStorage, fetcher = fetch, clientId: bundledId = process.env.MML_MICROSOFT_CLIENT_ID || '', now = Date.now, notify = () => {} }) {
   const file = path.join(directory, 'minecraft-accounts.bin'), configFile = path.join(directory, 'minecraft-auth.json');
   let data = { accounts: [], active: null }, clientId = bundledId, pending = null, busy = false, generation = 0;
-  const state = () => ({ configured: Boolean(clientId), clientId, active: data.active, accounts: data.accounts.map(({ id, name, expires }) => ({ id, name, expires })) });
+  const state = () => ({ configured: Boolean(clientId), clientId, active: data.active, accounts: data.accounts.map(({ id, name, expires, skinUrl }) => ({ id, name, expires, skinUrl })) });
   async function save() {
     if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows credential encryption is unavailable.');
     await fs.mkdir(directory, { recursive: true });
@@ -41,15 +45,32 @@ function createMinecraftAccounts({ directory, safeStorage, fetcher = fetch, clie
     if (!Array.isArray(entitlements.items) || !entitlements.items.length) throw new Error('Minecraft Java Edition ownership or an active subscription could not be verified for this account.');
     const profile = await request('https://api.minecraftservices.com/minecraft/profile', null, minecraft.access_token);
     if (!/^[a-f0-9]{32}$/i.test(profile.id || '') || !/^[A-Za-z0-9_]{1,16}$/.test(profile.name || '')) throw new Error('Minecraft did not return a valid player profile.');
-    return { id: profile.id, name: profile.name, refreshToken: tokens.refresh_token, accessToken: minecraft.access_token, expires: now() + minecraft.expires_in * 1000, clientId };
+    const skinUrl = profileSkin(profile);
+    return { id: profile.id, name: profile.name, skinUrl, refreshToken: tokens.refresh_token, accessToken: minecraft.access_token, expires: now() + minecraft.expires_in * 1000, clientId };
   }
   async function exclusive(fn) { if (busy) throw new Error('An account operation is already running.'); busy = true; try { return await fn(); } finally { busy = false; } }
   return {
     state,
+    launchSession: () => exclusive(async () => {
+      let account = data.accounts.find(a => a.id === data.active);
+      if (!account) throw new Error('Sign into a Minecraft Java account before playing.');
+      if (account.expires < now() + 300000) {
+        const tokens = await request(OAUTH + 'token', new URLSearchParams({ client_id: account.clientId, grant_type: 'refresh_token', refresh_token: account.refreshToken, scope: SCOPE }));
+        const refreshed = await exchange(tokens); if (refreshed.id !== account.id) throw new Error('Microsoft returned a different account. Sign in again.');
+        const previous = data; data = { ...data, accounts: data.accounts.map(a => a.id === refreshed.id ? { ...refreshed, clientId: account.clientId } : a) };
+        try { await save(); } catch(error) { data = previous; throw error; } account = data.accounts.find(a => a.id === data.active);
+      }
+      return { id: account.id, name: account.name, accessToken: account.accessToken };
+    }),
     initialize: () => exclusive(async () => {
       try { const saved = JSON.parse(await fs.readFile(configFile, 'utf8')); if (!bundledId && /^[a-f0-9-]{36}$/i.test(saved.clientId || '')) clientId = saved.clientId; } catch (error) { if (error.code !== 'ENOENT') throw new Error('Minecraft sign-in settings could not be read.'); }
       try { if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows encryption unavailable'); data = JSON.parse(safeStorage.decryptString(await fs.readFile(file))); if (!Array.isArray(data.accounts)) throw new Error('Invalid accounts'); }
       catch (error) { if (error.code !== 'ENOENT') throw new Error('Saved Minecraft accounts could not be opened. Existing credentials were preserved.'); }
+      let updatedSkin = false;
+      for (const account of data.accounts.filter(a => !a.skinUrl && a.expires > now())) {
+        try { const profile = await request('https://api.minecraftservices.com/minecraft/profile',null,account.accessToken); const skinUrl=profileSkin(profile); if (profile.id===account.id && skinUrl) { account.skinUrl=skinUrl;updatedSkin=true; } } catch { /* Keep cached accounts usable while offline. */ }
+      }
+      if(updatedSkin) await save();
       return state();
     }),
     configure: value => exclusive(async () => {

@@ -27,7 +27,7 @@ function toast(message) {
 }
 function showPage(page) {
   state.page = page;
-  for (const name of ['discover', 'library', 'hosting', 'settings', 'project', 'accounts']) $(`#${name}-page`).hidden = page !== name;
+  for (const name of ['discover', 'library', 'hosting', 'settings', 'project', 'accounts', 'instance']) $(`#${name}-page`).hidden = page !== name;
   $$('[data-page]').forEach(button => button.classList.toggle('active', button.dataset.page === page));
   $('#breadcrumb').textContent = `Workspace / ${page === 'library' ? 'My library' : page === 'hosting' ? 'Servers' : page === 'settings' ? 'Settings & about' : 'Discover'}`;
   if (page === 'library') renderLibrary();
@@ -198,8 +198,10 @@ $('#create-form').onsubmit = async event => {
   finally { $('#save-profile').disabled = false; }
 };
 $('#library-list').onclick = async event => {
+  const play=event.target.closest('[data-play]');if(play)return playInstance(play.dataset.play);
+  const stop=event.target.closest('[data-stop]');if(stop)return stopInstance(stop.dataset.stop);
   const content = event.target.closest('[data-content]'); if (content) return showInstance(content.dataset.content);
-  const button = event.target.closest('[data-remove]'); if (!button) return;
+  const button = event.target.closest('[data-remove]'); if (!button) { const tile=event.target.closest('[data-instance-tile]');if(tile)return showInstance(tile.dataset.instanceTile);return; }
   if (button.dataset.confirm !== 'true') { button.dataset.confirm = 'true'; button.textContent = 'Confirm removal'; setTimeout(() => { button.dataset.confirm = ''; button.textContent = 'Remove'; }, 4000); return; }
   button.disabled = true;
   try { state.profiles = await api.removeProfile(button.dataset.remove); renderLibrary(); toast('Profile removed.'); }
@@ -212,8 +214,8 @@ loadVersions(); search();
 restoreAccount();
 
 function renderUpdate(status) {
-  $('#app-version').textContent = status.current || '0.4.1';
-  $('#update-current').textContent = `Installed: MML ${status.current || '0.4.1'}`;
+  $('#app-version').textContent = status.current || '0.5.0';
+  $('#update-current').textContent = `Installed: MML ${status.current || '0.5.0'}`;
   $('#update-channel').value = status.channel;
   $('#update-status').textContent = status.message;
   const working = ['checking', 'downloading'].includes(status.status);
@@ -238,6 +240,7 @@ if (window.mml) {
     if (status.status === 'available') toast(`MML ${status.latest} is available. Open Settings to update.`);
   });
   updateAction(() => window.mml.updateState());
-} else renderUpdate({ channel: 'stable', current: '0.4.1', status: 'development', message: 'Install the Windows application to check for and install updates.' });
+} else renderUpdate({ channel: 'stable', current: '0.5.0', status: 'development', message: 'Install the Windows application to check for and install updates.' });
 
+initializeInstances();
 initializeDiscovery();

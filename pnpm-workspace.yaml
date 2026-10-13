@@ -1,2 +1,5 @@
 allowBuilds:
   electron-winstaller: false
+patchedDependencies:
+  '@xmcl/installer@6.3.5': patches/@xmcl__installer@6.3.5.patch
+  '@xmcl/unzip@2.2.0': patches/@xmcl__unzip@2.2.0.patch

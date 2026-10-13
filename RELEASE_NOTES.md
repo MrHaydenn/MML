@@ -1,7 +1,13 @@
-# MML 0.4.1
+# MML 0.5.0
 
-MML now includes its approved Microsoft application ID for Minecraft sign-in, so users no longer need to enter it manually. The account screen shows progress through Microsoft authorization, Xbox authentication, Minecraft sign-in, Java ownership and player-profile lookup. Errors identify the failing service and HTTP status without exposing credentials.
+MML can now launch Minecraft on Windows. Play automatically installs the matching Mojang Java runtime, game files, libraries, assets and instance loader, then launches using the selected verified Minecraft account. Vanilla, Fabric, Forge, NeoForge and Quilt are supported.
 
-Validation: the real sign-in flow completed successfully with HTTP 200 from Microsoft, Xbox, Minecraft login, Java ownership and player profile; Windows-encrypted account persistence passed. The diagnostic used disposable storage and removed its temporary account afterward. Automated tests cover sign-in, cancellation and safe error handling.
+- Square library tiles with the instance image in the top-left and Play/Stop controls.
+- A dedicated instance page with content search and filters, mod toggles, account selection, settings and launch logs.
+- Per-instance name and memory settings, shared game options and saved servers, and an option to detach from original modpack update notifications.
+- Minecraft skin faces beside the prominent sidebar account; a grass block when signed out, with a smaller Haydenn Accounts entry.
+- Microsoft sign-in codes are copied before the browser opens.
 
-Download and run MML-Setup-0.4.1.exe, then retry Sign in with Microsoft from Minecraft Accounts. Existing accounts and instances are preserved. The development installer is unsigned. Java setup and game launching remain future work.
+Validation: 41 automated tests passed. Real authenticated Fabric Minecraft launches reached rendering/audio initialization on both Minecraft 1.21.1 / Java 21 and Minecraft 26.3 / Java 25. Real Forge, NeoForge and Quilt first-play preparations passed. The real Electron UI confirmed square tiles and rendered the instance page.
+
+Download and run MML-Setup-0.5.0.exe. First play downloads game components and can take several minutes. Keep MML open while playing for launch logs and settings synchronization; shared options are saved when the game exits. Existing instances and accounts are retained. The development installer is unsigned.

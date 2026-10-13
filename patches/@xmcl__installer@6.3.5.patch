@@ -1,0 +1,22 @@
+diff --git a/dist/index.js b/dist/index.js
+index 2c56597f1f02fd9855d0f93bf36d3ac43b4287bb..1008800c57b75f42324dad9a3c7dca96aad85ab9 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -3023,7 +3023,7 @@ module.exports = __toCommonJS(index_exports);
+ 
+ // assets.ts
+ var import_core2 = require("@xmcl/core");
+-var import_utils2 = require("@xmcl/core/utils");
++var import_utils2 = { isNotNull: (value) => value !== undefined && value !== null };
+ var import_promises3 = require("fs/promises");
+ 
+ // diagnose.ts
+@@ -3530,7 +3530,7 @@ async function getForgeVersionList(options = {}) {
+ }
+ 
+ // libraries.ts
+-var import_utils7 = require("@xmcl/core/utils");
++var import_utils7 = { isNotNull: (value) => value !== undefined && value !== null };
+ var import_unzip = require("@xmcl/unzip");
+ var import_promises5 = require("fs/promises");
+ var import_path = require("path");

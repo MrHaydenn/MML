@@ -20,23 +20,29 @@ async function fixture(t, failure) {
     else if (url.includes('/xsts/')) result = { Token: 'xsts-secret', DisplayClaims: { xui: [{ uhs: '123' }] } };
     else if (url.endsWith('/login_with_xbox')) result = { access_token: 'minecraft-secret', expires_in: 3600 };
     else if (url.includes('/entitlements/')) result = { items: [{ name: 'game_minecraft' }] };
-    else result = { id: String(player).padStart(32, '0'), name: 'Player' + player };
+    else result = { id: String(player).padStart(32, '0'), name: 'Player' + player, skins:[{state:'ACTIVE',url:'http://textures.minecraft.net/texture/'+'a'.repeat(64)}] };
     return Response.json(result);
   };
   const options = { directory, safeStorage, fetcher, clientId, now: () => time };
   const accounts = createMinecraftAccounts(options); await accounts.initialize();
-  return { accounts, options, directory, advance: () => { time += 10000; }, player: n => { player = n; }, mode: value => { mode = value; } };
+  return { accounts, options, directory, advance: (ms=10000) => { time += ms; }, player: n => { player = n; }, mode: value => { mode = value; } };
 }
 test('device-code sign-in verifies Java ownership, encrypts credentials, restores multiple accounts and keeps secrets out of renderer state', async t => {
   const f = await fixture(t);
   const code = await f.accounts.begin(); assert.equal(code.userCode, 'ABC-123'); assert(!JSON.stringify(code).includes('private-device-code'));
   assert.equal((await f.accounts.poll()).pending, true); f.advance();
   const first = await f.accounts.poll(); assert.equal(first.accounts[0].name, 'Player1'); assert(!JSON.stringify(first).includes('secret'));
+  assert.match(first.accounts[0].skinUrl,/^https:\/\/textures.minecraft.net/);
   f.player(2); await f.accounts.begin(); f.advance(); const second = await f.accounts.poll(); assert.equal(second.accounts.length, 2);
   const bytes = await fs.readFile(path.join(f.directory, 'minecraft-accounts.bin')); assert(!bytes.toString().includes('secret-refresh'));
   const restored = createMinecraftAccounts(f.options); assert.equal((await restored.initialize()).accounts.length, 2);
   await restored.activate(first.active); assert.equal(restored.state().active, first.active);
   await restored.remove(first.active); assert.equal(restored.state().accounts.length, 1);
+});
+
+test('game launch obtains credentials only through the internal session method and refreshes expired sessions',async t=>{
+  const f=await fixture(t);await f.accounts.begin();f.advance();await f.accounts.poll();f.advance(4000000);
+  const session=await f.accounts.launchSession();assert.equal(session.name,'Player1');assert.equal(session.accessToken,'minecraft-secret');assert(!JSON.stringify(f.accounts.state()).includes('minecraft-secret'));assert(f.accounts.state().accounts[0].expires>4000000);
 });
 
 test('Minecraft rejection identifies the exact stage without exposing server response secrets', async t => {

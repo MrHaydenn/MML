@@ -98,7 +98,7 @@ function createContent({ directory, library, api, fetcher = fetch, notify = () =
     for (const [key, value] of plans) if (value.expires < Date.now()) { await fs.rm(value.work, { recursive: true, force: true }); plans.delete(key); }
     if (plans.size >= 10) throw new Error('Close old installation previews before starting another.');
     const project = await api.project(input.projectId);
-    const profile = project.project_type === 'modpack' ? { id: randomUUID(), name: project.title.slice(0, 60), gameVersion: '1.21.1', loader: 'vanilla', source: { id: project.id, title: project.title }, createdAt: new Date().toISOString() } : (await library.list()).find(p => p.id === input.instanceId);
+    const profile = project.project_type === 'modpack' ? { id: randomUUID(), name: project.title.slice(0, 60), gameVersion: '1.21.1', loader: 'vanilla', iconUrl: project.icon_url || null, packUpdates: true, source: { id: project.id, title: project.title }, createdAt: new Date().toISOString() } : (await library.list()).find(p => p.id === input.instanceId);
     if (!profile) throw new Error('Choose a Minecraft instance first.');
     await recover(profile.id);
     const before = await read(profile.id);
@@ -203,7 +203,7 @@ function createContent({ directory, library, api, fetcher = fetch, notify = () =
       let records = await read(value.profile.id);
       for (const record of value.records) {
         const old = records.find(r => r.projectId === record.projectId);
-        if (old) for (const file of old.files) await fs.rm(path.join(stage, 'game', safePath(file)), { force: true });
+        if (old) { record.enabled = old.enabled !== false; for (const file of old.files) await fs.rm(path.join(stage, 'game', safePath(file) + (old.enabled === false ? '.disabled' : '')), { force: true }); }
       }
       const destinations = new Map();
       for (let i = 0; i < value.files.length; i++) {
@@ -212,7 +212,8 @@ function createContent({ directory, library, api, fetcher = fetch, notify = () =
         destinations.set(key, true);
         const collision = records.find(r => !value.records.some(v => v.projectId === r.projectId) && r.files.some(f => f.toLowerCase() === key));
         if (collision) throw new Error(`File conflicts with ${collision.title}; existing files were preserved.`);
-        const dest = path.join(stage, 'game', name);
+        const owner = value.records.find(r => r.files.includes(name));
+        const dest = path.join(stage, 'game', name + (owner?.enabled === false ? '.disabled' : ''));
         try { await fs.access(dest); throw new Error(`Refusing to overwrite an untracked file: ${name}`); } catch (error) { if (error.code !== 'ENOENT') throw error; }
         notify({ state: 'downloading', completed: i, total: value.files.length, file: name });
         await download(file, dest, fetcher);
@@ -240,6 +241,28 @@ function createContent({ directory, library, api, fetcher = fetch, notify = () =
       notify({ state: 'error', message: error.message }); throw error;
     } finally { busy = false; }
   }
-  return { plan: async input => { if (busy) throw new Error('Wait for the current installation preview or download to finish.'); busy = true; try { return await plan(input); } finally { busy = false; } }, install, read, instancePath, recover, directory };
+  async function toggle({ instanceId, projectId, enabled }) {
+    if (busy) throw new Error('Wait for content installation to finish.');
+    if (typeof enabled !== 'boolean') throw new Error('Invalid mod state.');
+    busy = true; const moved = [];
+    try {
+      await recover(instanceId);
+      const records = await read(instanceId), record = records.find(r => r.projectId === projectId);
+      if (!record || record.type !== 'mod') throw new Error('Only installed mods can be toggled.');
+      if ((record.enabled !== false) === enabled) return records;
+      await assertNoLinks(instancePath(instanceId));
+      for (const name of record.files) {
+        const original = path.join(instancePath(instanceId), 'game', safePath(name));
+        const from = enabled ? original + '.disabled' : original, to = enabled ? original : original + '.disabled';
+        try { await fs.access(to); throw new Error('A mod file with this state already exists. Existing files were preserved.'); } catch(error) { if (error.code !== 'ENOENT') throw error; }
+        await fs.rename(from, to); moved.push([from,to]);
+      }
+      record.enabled = enabled;
+      const file = path.join(instancePath(instanceId), 'mml-content.json'); await fs.writeFile(file + '.tmp', JSON.stringify(records,null,2)); await fs.rename(file + '.tmp',file);
+      return graph(records);
+    } catch(error) { for(const [from,to] of moved.reverse()) await fs.rename(to,from); throw error; }
+    finally { busy = false; }
+  }
+  return { plan: async input => { if (busy) throw new Error('Wait for the current installation preview or download to finish.'); busy = true; try { return await plan(input); } finally { busy = false; } }, install, read, toggle, isBusy: () => busy, instancePath, recover, directory };
 }
 module.exports = { createContent, compatible, graph, safePath, allowedDownload, download, unzip };

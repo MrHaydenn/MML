@@ -21,7 +21,7 @@ async function page(t) {
     return { ok: true, json: async () => data };
   };
   const context = dom.getInternalVMContext();
-  for (const file of ['vendor/marked.js', 'vendor/purify.js', 'discovery.js', 'app.js']) new vm.Script(await fs.readFile(path.join(root, file), 'utf8'), { filename: file }).runInContext(context);
+  for (const file of ['vendor/marked.js', 'vendor/purify.js', 'discovery.js', 'instances.js', 'app.js']) new vm.Script(await fs.readFile(path.join(root, file), 'utf8'), { filename: file }).runInContext(context);
   await tick(); await tick();
   dom.window.document.querySelector('#continue-local').click();
   return { dom, doc: dom.window.document, calls };
@@ -68,4 +68,16 @@ test('workspace sign-in only submits existing-account credentials and clears the
   await doc.querySelector('#signin-form').onsubmit({preventDefault(){}});
   assert.equal(submitted.username,'MixedCase');assert.equal(submitted.password,'test password');assert.equal(Object.keys(submitted).length,2);
   assert.equal(doc.querySelector('#shared-password').value,'');assert.equal(doc.querySelector('#signin-screen').hidden,true);
+});
+
+test('instance tiles open a full page, expose Play, and instance settings persist sync choices',async t=>{
+  const {dom,doc}=await page(t);let saved;
+  dom.window.mml={setHostingLayout(){},installedContent:async()=>[],updateInstance:async(id,settings)=>{saved={id,...settings};return [{id,name:settings.name,gameVersion:'1.21.1',loader:'vanilla',...settings}];}};
+  assert(doc.querySelector('.instance-tile .instance-image'));assert(doc.querySelector('.instance-tile [data-play]'));
+  doc.querySelector('[data-content="default-vanilla"]').click();await tick();
+  assert.equal(doc.querySelector('#instance-page').hidden,false);assert.equal(doc.querySelector('#instance-dialog').open,false);
+  doc.querySelector('[data-instance-tab="settings"]').click();doc.querySelector('#instance-name').value='My settings';doc.querySelector('#instance-sync').checked=true;
+  await doc.querySelector('#instance-settings-form').onsubmit({preventDefault(){}});assert.equal(saved.syncSettings,true);assert.equal(saved.memoryMb,4096);assert.equal(saved.name,'My settings');
+  dom.window.renderMinecraft({accounts:[{id:'player',name:'Player',expires:Date.now()+10000,skinUrl:'https://textures.minecraft.net/texture/'+'a'.repeat(64)}],active:'player',configured:true});
+  assert(doc.querySelector('#minecraft-sidebar-avatar .skin-face'));assert.equal(doc.querySelector('#minecraft-sidebar-name').textContent,'Player');
 });

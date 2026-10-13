@@ -117,3 +117,17 @@ test('default Vanilla profile is unique and tracks the latest version without re
   await library.ensureDefault('1.21.1'); await library.ensureDefault('26.1.2');
   const profiles = await library.list(); assert.equal(profiles.length, 2); assert.equal(profiles.find(p => p.autoUpdate).gameVersion, '26.1.2');
 });
+
+test('mod toggles rename files safely, retain dependencies and preserve disabled state across reinstall', async t => {
+  const root=version('root'),{content,profile}=await setup(t,{[root.id]:root});
+  const plan=await content.plan({projectId:'root',instanceId:profile.id});await content.install({planId:plan.planId});
+  let records=await content.toggle({instanceId:profile.id,projectId:'root',enabled:false});assert.equal(records[0].enabled,false);
+  const filename=path.join(content.instancePath(profile.id),'game/mods/root.jar');await assert.rejects(fs.access(filename));assert.equal(await fs.readFile(filename+'.disabled','utf8'),'root');
+  const reinstall=await content.plan({projectId:'root',instanceId:profile.id});await content.install({planId:reinstall.planId});assert.equal((await content.read(profile.id))[0].enabled,false);
+  records=await content.toggle({instanceId:profile.id,projectId:'root',enabled:true});assert.equal(records[0].enabled,true);assert.equal(await fs.readFile(filename,'utf8'),'root');
+});
+
+test('instance settings detach update tracking while preserving pack identity and validate memory limits',async t=>{
+  const {library,profile}=await setup(t,{});let profiles=await library.update(profile.id,{packUpdates:false,syncSettings:true,memoryMb:6144});const updated=profiles.find(p=>p.id===profile.id);assert.equal(updated.packUpdates,false);assert.equal(updated.syncSettings,true);assert.equal(updated.memoryMb,6144);assert.equal(updated.gameVersion,'1.21.1');
+  await assert.rejects(library.update(profile.id,{memoryMb:0}),/Memory/);assert.equal((await library.list()).find(p=>p.id===profile.id).memoryMb,6144);
+});

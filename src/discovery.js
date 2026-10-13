@@ -131,25 +131,11 @@ async function openInstall(projectId, versionId = '') {
     $('#install-close').onclick = () => dialog.close();
   }
 }
-function renderLibrary() {
-  $('#library-count').textContent = state.profiles.length;
-  $('#library-list').innerHTML = state.profiles.map(profile => `<article class="library-card"><div class="profile-monogram">${escapeHTML(profile.name.charAt(0).toUpperCase())}</div><h2>${escapeHTML(profile.name)}</h2><p>Minecraft ${escapeHTML(profile.gameVersion)} · ${escapeHTML(profile.loader)}${profile.loaderVersion ? ' ' + escapeHTML(profile.loaderVersion) : ''}<br>${profile.autoUpdate ? 'Automatically follows the latest Minecraft release' : profile.source ? `From ${escapeHTML(profile.source.title)}` : 'Your Minecraft instance'}</p><div class="library-actions"><button class="secondary" data-content="${escapeHTML(profile.id)}">Manage content</button>${profile.autoUpdate ? '<span class="status-pill">LATEST VANILLA</span>' : `<button class="text-button" data-remove="${escapeHTML(profile.id)}">Remove</button>`}</div></article>`).join('') || '<div class="empty-state"><h2>Create your first Minecraft instance</h2><p>The latest Vanilla instance is added automatically when Minecraft’s version service is reachable.</p><button id="empty-create" class="primary">＋ Create an instance</button></div>';
-  if ($('#empty-create')) $('#empty-create').onclick = () => openCreate();
-}
-async function showInstance(id) {
-  const profile = state.profiles.find(p => p.id === id), dialog = $('#instance-dialog');
-  $('#instance-content').innerHTML = '<h2>Loading installed content…</h2>'; dialog.showModal();
-  try {
-    const records = window.mml ? await window.mml.installedContent(id) : [];
-    if (!dialog.open) return;
-    $('#instance-content').innerHTML = `<div class="dialog-heading"><h2>${escapeHTML(profile.name)}</h2><button id="instance-close" class="icon-button" aria-label="Close">×</button></div><p class="dialog-intro">Minecraft ${escapeHTML(profile.gameVersion)} / ${escapeHTML(profile.loader)}. Content is installed in this instance’s game folder. Game launch and runtime installation are not available yet.</p><div class="dependency-preview">${records.map(r => `<div><strong>${escapeHTML(r.title)}</strong><small>${escapeHTML(r.version)} · ${r.explicit ? 'Installed directly' : 'Dependency / pack content'}${r.requiredBy.length ? ` · Required by: ${escapeHTML(r.requiredBy.join(', '))}` : ''}</small></div>`).join('') || '<p>No content installed yet. Add it from Discover.</p>'}</div><button id="instance-open" class="secondary">Open instance folder ↗</button><p id="instance-error" class="error-text"></p>`;
-    $('#instance-close').onclick = () => dialog.close();
-    $('#instance-open').onclick = () => window.mml ? window.mml.openInstance(id).catch(error => { $('#instance-error').textContent = error.message; }) : toast('Instance folders are available in the Windows application.');
-  } catch (error) { $('#instance-content').innerHTML = `<p>${escapeHTML(error.message)}</p><button id="instance-close" class="secondary">Close</button>`; $('#instance-close').onclick = () => dialog.close(); }
-}
 function renderMinecraft(value) {
   const active = value.accounts.find(a => a.id === value.active);
   $('#minecraft-sidebar-name').textContent = active ? active.name : 'Sign into Minecraft';
+  $('#minecraft-sidebar-avatar').innerHTML = minecraftFace(active);
+  minecraftPlayers = value;
   $('#minecraft-client-id').value = value.clientId || '';
   $('#minecraft-config').open = !value.configured;
   $('#minecraft-add').disabled = !window.mml || !value.configured;
@@ -183,7 +169,7 @@ function initializeDiscovery() {
   };
   $('#minecraft-add').onclick = async () => {
     clearTimeout(minecraftPollTimer); $('#minecraft-add').disabled = true; $('#minecraft-error').textContent = '';
-    try { const result = await window.mml.beginMinecraft(); $('#minecraft-device').hidden = false; $('#minecraft-code').textContent = result.userCode; $('#minecraft-wait').textContent = 'Waiting for you to finish sign-in on Microsoft’s website…'; minecraftPollTimer = setTimeout(poll, result.interval); await window.mml.openMinecraftLogin(); }
+    try { const result = await window.mml.beginMinecraft(); $('#minecraft-device').hidden = false; $('#minecraft-code').textContent = result.userCode; $('#minecraft-wait').textContent = 'Code copied to clipboard. Paste it on Microsoft’s sign-in page.'; minecraftPollTimer = setTimeout(poll, result.interval); await window.mml.openMinecraftLogin(); }
     catch (error) { $('#minecraft-error').textContent = error.message; $('#minecraft-add').disabled = false; }
   };
   $('#minecraft-cancel').onclick = async () => { clearTimeout(minecraftPollTimer); await window.mml.cancelMinecraft(); $('#minecraft-device').hidden = true; $('#minecraft-add').disabled = false; };

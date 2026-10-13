@@ -1,6 +1,10 @@
 # MrHaydenn's Minecraft Launcher (MML)
 
-A Windows-first Minecraft modpack workspace. **Working title · 0.4.0 discovery and installation preview.**
+The account server is a separate **Haydenn Accounts** project deployed on your Windows server.
+MML signs into accounts.mrhaydenn.us with an existing Haydenn Accounts username and password.
+Minecraft accounts are connected separately through Microsoft.
+
+A Windows-first Minecraft modpack workspace. **Working title · 0.5.0 instance and game-launch preview.**
 
 An original charcoal, olive, and amber interface with a familiar launcher structure: discovery, your library, and profile creation.
 
@@ -18,7 +22,7 @@ An original charcoal, olive, and amber interface with a familiar launcher struct
 - Windows x64 installer and CI build configuration.
 - Connect an MMSM account with an instance URL and one-use token. The **Servers** tab opens that instance already signed in with the account's existing permissions.
 
-**This milestone installs content, but does not launch Minecraft yet.** Java management, loader binaries, game launch and pack export are future milestones. The Latest Minecraft Vanilla instance follows release metadata on startup; it does not download the game runtime yet. Browsing public Modrinth content does not require an API key.
+**MML can now install and launch Minecraft on Windows x64.** First play installs the matching Mojang Java runtime, game files, libraries, assets and loader. A verified Minecraft Java account is required. Pack export remains future work. Browsing public Modrinth content does not require an API key.
 
 ## Develop on Windows
 
@@ -92,3 +96,11 @@ Open Accounts from the bottom-left Minecraft button. Enter MML's approved public
 Popular discovery uses total downloads because Modrinth does not expose weekly rankings. Mods, resource packs and shaders use list rows; modpacks keep large cards. Downloads are hash-verified and staged before replacing instances. Unsupported and optional client pack files are skipped. Unsupported download hosts fail with an explanation.
 
 `pnpm test:install` verifies a real mod with dependencies and a full pack in disposable storage.
+
+## Playing and managing instances
+
+Click a square instance tile to open its Content, Settings and Logs page. Play installs game components on first use; later launches reuse verified cached files. Vanilla, Fabric, Quilt, Forge and NeoForge installations use the instance's Minecraft version and pinned loader version when present. Settings allow changing maximum memory, sharing options.txt and servers.dat across opted-in instances, and disabling update tracking for the original modpack. Shared settings are pulled before play and saved when the game exits; mods and worlds remain separate. Stop the game before modifying its content. Keep MML open while playing to retain launch status, logs and settings synchronization.
+
+Mod toggles rename tracked JAR files with a .disabled suffix and retain dependency metadata. Minecraft's active skin face appears next to the player in the sidebar. Microsoft device codes are copied to the clipboard before the browser opens.
+
+The pinned XMCL dependencies include two narrow published-package fixes under patches/: the unzip entry point and the installer's missing private utility import. pnpm applies these through pnpm-workspace.yaml on every clean install.
