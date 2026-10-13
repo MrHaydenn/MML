@@ -171,12 +171,13 @@ function initializeDiscovery() {
   };
   $('#install-dialog').addEventListener('cancel', event => { if ($('#install-dialog').dataset.installing) event.preventDefault(); });
   $('#minecraft-menu').onclick = () => showPage('accounts');
+  window.mml?.onMinecraftStatus?.(status => { $('#minecraft-wait').textContent = `${status.stage}…`; });
   $('#minecraft-open').onclick = () => window.mml.openMinecraftLogin().catch(error => { $('#minecraft-error').textContent = error.message; });
   $('#minecraft-save-config').onclick = async () => { try { renderMinecraft(await window.mml.configureMinecraft($('#minecraft-client-id').value.trim())); $('#minecraft-error').textContent = ''; } catch (error) { $('#minecraft-error').textContent = error.message; } };
   const poll = async () => {
     try {
       const result = await window.mml.pollMinecraft();
-      if (result.pending) minecraftPollTimer = setTimeout(poll, result.interval);
+      if (result.pending) { $('#minecraft-wait').textContent = 'Waiting for you to finish sign-in on Microsoft’s website…'; minecraftPollTimer = setTimeout(poll, result.interval); }
       else { $('#minecraft-device').hidden = true; $('#minecraft-add').disabled = false; renderMinecraft(result); toast('Minecraft account connected.'); }
     } catch (error) { $('#minecraft-error').textContent = error.message; $('#minecraft-device').hidden = true; $('#minecraft-add').disabled = false; }
   };

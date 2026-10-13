@@ -63,7 +63,8 @@ app.whenReady().then(() => {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
-  const minecraft = createMinecraftAccounts({ directory: app.getPath('userData'), safeStorage, clientId: require('../package.json').microsoftClientId || undefined });
+  const minecraft = createMinecraftAccounts({ directory: app.getPath('userData'), safeStorage, clientId: require('../package.json').microsoftClientId || undefined,
+    notify: status => { if (!window.isDestroyed()) window.webContents.send('minecraft:status', status); } });
   const minecraftReady = minecraft.initialize();
   // Preserve initialization errors for the Accounts screen without an unhandled rejection.
   minecraftReady.catch(() => {});

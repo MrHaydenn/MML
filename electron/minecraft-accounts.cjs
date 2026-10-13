@@ -3,7 +3,7 @@ const path = require('node:path');
 const OAUTH = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/';
 const SCOPE = 'XboxLive.signin offline_access';
 
-function createMinecraftAccounts({ directory, safeStorage, fetcher = fetch, clientId: bundledId = process.env.MML_MICROSOFT_CLIENT_ID || '', now = Date.now }) {
+function createMinecraftAccounts({ directory, safeStorage, fetcher = fetch, clientId: bundledId = process.env.MML_MICROSOFT_CLIENT_ID || '', now = Date.now, notify = () => {} }) {
   const file = path.join(directory, 'minecraft-accounts.bin'), configFile = path.join(directory, 'minecraft-auth.json');
   let data = { accounts: [], active: null }, clientId = bundledId, pending = null, busy = false, generation = 0;
   const state = () => ({ configured: Boolean(clientId), clientId, active: data.active, accounts: data.accounts.map(({ id, name, expires }) => ({ id, name, expires })) });
@@ -14,13 +14,17 @@ function createMinecraftAccounts({ directory, safeStorage, fetcher = fetch, clie
     await fs.rename(file + '.tmp', file);
   }
   async function request(url, body, bearer) {
+    const stage = url.endsWith('/devicecode') ? 'Microsoft sign-in code' : url.endsWith('/token') ? 'Microsoft authorization' : url.includes('user.auth.xboxlive.com') ? 'Xbox profile authentication' : url.includes('xsts.auth.xboxlive.com') ? 'Xbox authorization' : url.endsWith('/login_with_xbox') ? 'Minecraft sign-in' : url.includes('/entitlements/') ? 'Minecraft Java ownership' : 'Minecraft player profile';
+    notify({stage});
     const form = body instanceof URLSearchParams;
     let response;
     try { response = await fetcher(url, { method: body ? 'POST' : 'GET', redirect: 'error', signal: AbortSignal.timeout(20000), headers: { Accept: 'application/json', ...(body ? { 'Content-Type': form ? 'application/x-www-form-urlencoded' : 'application/json' } : {}), ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) }, ...(body ? { body: form ? body.toString() : JSON.stringify(body) } : {}) }); }
-    catch { throw new Error('Could not reach Microsoft or Minecraft. Check your connection and try again.'); }
-    const result = await response.json();
+    catch { throw new Error(`${stage}: could not reach the service. Check your connection and try again.`); }
+    const result = await response.json().catch(() => { throw new Error(`${stage}: service returned an invalid response (HTTP ${response.status}).`); });
     if (!response.ok) {
       const error = new Error(result.XErr === 2148916233 ? 'This Microsoft account needs an Xbox profile. Create one on xbox.com, then try again.' : result.XErr === 2148916238 ? 'This child account needs family approval to use Xbox services.' : response.status === 404 && url.endsWith('/minecraft/profile') ? 'This account has no Minecraft Java profile. Check its Java Edition ownership or subscription.' : result.error === 'invalid_client' || result.error === 'unauthorized_client' ? 'Microsoft rejected MML’s application registration. Check the approved client ID and public-client/device-flow settings.' : 'Microsoft or Minecraft rejected sign-in. Check account permissions, Java ownership, and the approved application registration.');
+      if (url.endsWith('/login_with_xbox') && /invalid app registration/i.test(String(result.error || '') + ' ' + String(result.errorMessage || ''))) error.message = 'Minecraft rejected this application registration. Confirm the configured client ID matches the approved AppID; approval may still be propagating.';
+      error.message = `${stage} failed (HTTP ${response.status}${Number.isInteger(result.XErr) ? `, Xbox code ${result.XErr}` : ''}): ${error.message}`;
       error.code = result.error; throw error;
     }
     return result;

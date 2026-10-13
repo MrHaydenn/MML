@@ -212,8 +212,8 @@ loadVersions(); search();
 restoreAccount();
 
 function renderUpdate(status) {
-  $('#app-version').textContent = status.current || '0.4.0';
-  $('#update-current').textContent = `Installed: MML ${status.current || '0.4.0'}`;
+  $('#app-version').textContent = status.current || '0.4.1';
+  $('#update-current').textContent = `Installed: MML ${status.current || '0.4.1'}`;
   $('#update-channel').value = status.channel;
   $('#update-status').textContent = status.message;
   const working = ['checking', 'downloading'].includes(status.status);
@@ -238,6 +238,6 @@ if (window.mml) {
     if (status.status === 'available') toast(`MML ${status.latest} is available. Open Settings to update.`);
   });
   updateAction(() => window.mml.updateState());
-} else renderUpdate({ channel: 'stable', current: '0.4.0', status: 'development', message: 'Install the Windows application to check for and install updates.' });
+} else renderUpdate({ channel: 'stable', current: '0.4.1', status: 'development', message: 'Install the Windows application to check for and install updates.' });
 
 initializeDiscovery();

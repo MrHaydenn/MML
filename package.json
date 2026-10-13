@@ -1,6 +1,6 @@
 {
   "name": "mml",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "MrHaydenn's Minecraft Launcher — a Windows modpack workspace",
   "author": "MrHaydenn",
   "private": true,
@@ -56,5 +56,6 @@
     "electron-updater": "^6.8.9",
     "marked": "^18.1.0",
     "yauzl": "^3.4.0"
-  }
+  },
+  "microsoftClientId": "690e4111-e847-46a3-a197-077329369a80"
 }

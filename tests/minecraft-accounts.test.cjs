@@ -6,10 +6,11 @@ const os = require('node:os');
 const { createMinecraftAccounts } = require('../electron/minecraft-accounts.cjs');
 const clientId = '11111111-1111-1111-1111-111111111111';
 const safeStorage = { isEncryptionAvailable: () => true, encryptString: value => Buffer.from(value.split('').reverse().join('')), decryptString: value => value.toString().split('').reverse().join('') };
-async function fixture(t) {
+async function fixture(t, failure) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'mml-microsoft-')); t.after(() => fs.rm(directory, { recursive: true, force: true }));
   let time = 1000, player = 1, mode = '';
   const fetcher = async (url, options) => {
+    if (failure && url.endsWith(failure.path)) return Response.json(failure.body, { status: failure.status });
     let result;
     if (url.endsWith('/devicecode')) result = { user_code: 'ABC-123', device_code: 'private-device-code', expires_in: 900, interval: 5 };
     else if (url.endsWith('/token')) {
@@ -36,6 +37,19 @@ test('device-code sign-in verifies Java ownership, encrypts credentials, restore
   const restored = createMinecraftAccounts(f.options); assert.equal((await restored.initialize()).accounts.length, 2);
   await restored.activate(first.active); assert.equal(restored.state().active, first.active);
   await restored.remove(first.active); assert.equal(restored.state().accounts.length, 1);
+});
+
+test('Minecraft rejection identifies the exact stage without exposing server response secrets', async t => {
+  const f = await fixture(t, {path:'/login_with_xbox',status:403,body:{error:'Invalid app registration',access_token:'DO-NOT-EXPOSE'}});
+  await f.accounts.begin();f.advance();
+  await assert.rejects(f.accounts.poll(), error => /Minecraft sign-in failed \(HTTP 403\)/.test(error.message) && /approved AppID/.test(error.message) && !error.message.includes('DO-NOT-EXPOSE'));
+  assert.equal(f.accounts.state().accounts.length,0);
+});
+
+test('Xbox failures identify authorization separately from Minecraft approval', async t => {
+  const f = await fixture(t, {path:'/xsts/authorize',status:401,body:{XErr:2148916233}});
+  await f.accounts.begin();f.advance();
+  await assert.rejects(f.accounts.poll(), /Xbox authorization failed \(HTTP 401, Xbox code 2148916233\).*Xbox profile/);
 });
 test('pending and slow-down responses respect polling intervals and cancellation prevents completion', async t => {
   const f = await fixture(t); await f.accounts.begin(); f.advance(); f.mode('authorization_pending'); assert.equal((await f.accounts.poll()).pending, true);

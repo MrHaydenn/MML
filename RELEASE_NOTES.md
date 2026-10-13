@@ -1,11 +1,7 @@
-# MML 0.4.0
+# MML 0.4.1
 
-Sign into your MML workspace with your existing Haydenn Accounts username and password at accounts.mrhaydenn.us. The sign-in screen no longer asks for an MMSM URL, service URL or pairing token, and does not offer account registration.
+MML now includes its approved Microsoft application ID for Minecraft sign-in, so users no longer need to enter it manually. The account screen shows progress through Microsoft authorization, Xbox authentication, Minecraft sign-in, Java ownership and player-profile lookup. Errors identify the failing service and HTTP status without exposing credentials.
 
-This release also includes project overview and version pages, large modpack cards and list views for other content, compatible content installation with warnings, required dependencies and reverse dependency tracking, Modrinth pack installation, a latest-release Vanilla profile, and multiple Minecraft account support.
+Validation: the real sign-in flow completed successfully with HTTP 200 from Microsoft, Xbox, Minecraft login, Java ownership and player profile; Windows-encrypted account persistence passed. The diagnostic used disposable storage and removed its temporary account afterward. Automated tests cover sign-in, cancellation and safe error handling.
 
-Microsoft/Minecraft authentication remains separate from your Haydenn Accounts login and requires the launcher application's Minecraft API approval. Java management, loader binaries and launching the game remain future work.
-
-Validation: 31 automated tests passed; Windows installer built successfully. The prior milestone also verified real Modrinth mod/dependency and pack downloads.
-
-Download and run MML-Setup-0.4.0.exe to update without signing into the launcher. The development installer is unsigned.
+Download and run MML-Setup-0.4.1.exe, then retry Sign in with Microsoft from Minecraft Accounts. Existing accounts and instances are preserved. The development installer is unsigned. Java setup and game launching remain future work.

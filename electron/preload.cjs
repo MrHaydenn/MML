@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('mml', {
   removeMinecraft: id => ipcRenderer.invoke('minecraft:remove', id),
   refreshMinecraft: id => ipcRenderer.invoke('minecraft:refresh', id),
   openMinecraftLogin: () => ipcRenderer.invoke('minecraft:openLogin'),
+  onMinecraftStatus: callback => { const listener = (_event, status) => callback(status); ipcRenderer.on('minecraft:status', listener); return () => ipcRenderer.removeListener('minecraft:status', listener); },
   restoreAccount: () => ipcRenderer.invoke('account:restore'),
   accountState: () => ipcRenderer.invoke('account:state'),
   connectAccount: input => ipcRenderer.invoke('account:connect', input),
