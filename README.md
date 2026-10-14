@@ -4,7 +4,7 @@ The account server is a separate **Haydenn Accounts** project deployed on your W
 MML signs into accounts.mrhaydenn.us with an existing Haydenn Accounts username and password.
 Minecraft accounts are connected separately through Microsoft.
 
-A Windows-first Minecraft modpack workspace. **Working title · 0.8.0 instance and game-launch preview.**
+A Windows-first Minecraft modpack workspace. **Working title · 0.9.0 instance and game-launch preview.**
 
 An original charcoal and grey interface with bright green highlights with a familiar launcher structure: discovery, your library, and profile creation.
 
@@ -115,3 +115,13 @@ Updates download and verify in the background for the selected channel. Restart 
 MML 0.8 uses a 76-pixel icon rail with accessible names, hover labels and shortcuts for active library instances. Archived instances stay in Library and do not take up the rail. The Minecraft account and Haydenn account controls remain separate at the bottom; the Settings icon tooltip includes the app version. Discover starts directly with content tabs and search, retaining a compact target label when adding content to an instance.
 
 The skin selector shows a large draggable player preview and a full-body saved-skin grid. Add skin supports file selection or drag and drop. Full-body thumbnails share a single temporary WebGL renderer and are cached, so a large library does not require a graphics context for every tile. Edit opens a modal with texture replacement, wide/slim arms and thumbnail choices for owned capes. The pixel editor is expandable inside the modal. Cancelling discards the draft; Save skin stores it locally. A saved cape preference is applied together with the skin when Apply to Minecraft is clicked, and unavailable cape selections are rejected before changing the skin. An applied marker is shown when the saved appearance matches the current Minecraft profile.
+
+### Discover, screenshots and skin workspace
+
+Project cards are clickable throughout. Description, Versions and Gallery work across mods, modpacks, resource packs and shaders. HTTPS author images are loaded without a referrer. Versions can be filtered by game version and platform.
+
+Screenshots aggregates each instance’s `game/screenshots` folder, including archived instances. Previews load on demand; Copy Image writes PNG image data to the Windows clipboard. External/symlinked screenshot folders are excluded.
+
+Nine default Minecraft skins can be copied into the local skin library. Default textures are unmodified assets from Minecraft 26.3 (`assets/minecraft/textures/entity/player`), © Mojang/Microsoft. The full-page texture editor provides drawing tools, live 3D preview, undo/redo, zoom and panning. Saving stays local; Apply changes your signed-in Minecraft account.
+
+Playtime starts being recorded with 0.9.0, using the lifetime of Minecraft processes launched by MML, with periodic checkpoints. Earlier gameplay cannot be reconstructed.

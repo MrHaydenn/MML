@@ -1,5 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('mml', {
+  screenshots:()=>ipcRenderer.invoke('screenshots:list'),
+  screenshotImage:input=>ipcRenderer.invoke('screenshots:image',input),
+  copyScreenshot:input=>ipcRenderer.invoke('screenshots:copy',input),
   search: input => ipcRenderer.invoke('modrinth:search', input),
   project: id => ipcRenderer.invoke('modrinth:project', id),
   versions: id => ipcRenderer.invoke('modrinth:versions', id),

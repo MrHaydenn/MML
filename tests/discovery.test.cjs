@@ -21,7 +21,7 @@ async function page(t) {
     return { ok: true, json: async () => data };
   };
   const context = dom.getInternalVMContext();
-  for (const file of ['vendor/marked.js', 'vendor/purify.js', 'discovery.js', 'instances.js', 'skins.js', 'app.js']) new vm.Script(await fs.readFile(path.join(root, file), 'utf8'), { filename: file }).runInContext(context);
+  for (const file of ['vendor/marked.js', 'vendor/purify.js', 'project-content.js','screenshots.js','discovery.js', 'instances.js','default-skins.js','pixel-editor.js','skin-workspace.js', 'skins.js', 'app.js']) new vm.Script(await fs.readFile(path.join(root, file), 'utf8'), { filename: file }).runInContext(context);
   await tick(); await tick();
   dom.window.document.querySelector('#continue-local').click();
   return { dom, doc: dom.window.document, calls };
@@ -41,7 +41,7 @@ test('project overview renders sanitized Markdown, versions can open an instance
   assert.equal(doc.querySelector('#project-page').hidden, false);
   assert.match(doc.querySelector('.project-markdown').textContent, /Project home/);
   assert.equal(doc.querySelector('.project-markdown script'), null);
-  assert.equal(doc.querySelector('.project-markdown img'), null);
+  assert.equal(doc.querySelector('.project-markdown img').hasAttribute('onerror'), false);
   assert.equal(dom.window.pwned, undefined);
   doc.querySelector('[data-project-tab="versions"]').click();
   assert(doc.querySelector('[data-version-install="v1"]'));
@@ -109,7 +109,7 @@ test('linked modpack content is separate and can be disabled; Servers and MMSM p
 test('Library is the startup page; archiving moves and restores tiles without losing the instance',async t=>{
  const {dom,doc}=await page(t);assert.equal(doc.querySelector('#library-page').hidden,false);assert.equal(doc.querySelector('#discover-page').hidden,true);
  dom.window.mml={updateInstance:async(id,settings)=>[{id,name:'Latest Minecraft',gameVersion:'1.21.1',loader:'vanilla',autoUpdate:true,...settings}]};
- doc.querySelector('[data-archive]').click();await tick();assert.equal(doc.querySelector('#library-list .instance-tile'),null);assert(doc.querySelector('#archived-list .instance-tile'));assert.equal(doc.querySelector('#archived-section').hidden,false);
+ assert.equal(doc.querySelector('#library-list [data-archive]'),null);dom.window.mml.installedContent=async()=>[];await dom.window.showInstance('default-vanilla');doc.querySelector('[data-instance-tab="settings"]').click();doc.querySelector('#instance-archived').checked=true;await doc.querySelector('#instance-settings-form').onsubmit({preventDefault(){}});dom.window.showPage('library');assert.equal(doc.querySelector('#library-list .instance-tile'),null);assert(doc.querySelector('#archived-list .instance-tile'));assert.equal(doc.querySelector('#archived-section').hidden,false);
  doc.querySelector('#archived-list [data-archive]').click();await tick();assert(doc.querySelector('#library-list .instance-tile'));assert.equal(doc.querySelector('#archived-section').hidden,true);
 });
 test('pack versions and additional update buttons are shown independently',async t=>{
@@ -121,4 +121,24 @@ test('pack versions and additional update buttons are shown independently',async
 test('compact navigation opens skins and instance shortcuts while Discover omits its large heading',async t=>{
  const {dom,doc}=await page(t);assert.equal(doc.querySelector('#discover-title'),null);assert.equal(doc.querySelector('.discovery-note'),null);assert(doc.querySelector('[data-page="skins"][aria-label="Skins"] svg'));assert(doc.querySelector('#sidebar-instances [data-quick-instance="default-vanilla"]'));
  doc.querySelector('[data-page="skins"]').click();assert.equal(doc.querySelector('#skins-page').hidden,false);assert.match(doc.querySelector('#skins-page').textContent,/Windows launcher/);doc.querySelector('[data-page="library"]').click();assert.equal(doc.querySelector('#library-page').hidden,false);doc.querySelector('[data-quick-instance="default-vanilla"]').click();await tick();assert.equal(doc.querySelector('#instance-page').hidden,false);
+});
+
+test('instance settings gear is first, custom instance art does not replace linked pack art, and playtime is shown',async t=>{
+ const {dom,doc}=await page(t);dom.window.eval("Object.assign(state.profiles[0],{source:{id:'pack',title:'Pack'},iconUrl:'https://cdn.modrinth.com/pack.png',iconData:'data:image/png;base64,aGVsbG8=',playtimeSeconds:7500,launchCount:4})");dom.window.mml={installedContent:async()=>[]};await dom.window.showInstance('default-vanilla');assert.equal(doc.querySelector('.instance-tabs button').dataset.instanceTab,'settings');assert.equal(doc.querySelector('.instance-hero .instance-image').getAttribute('src'),'data:image/png;base64,aGVsbG8=');assert.equal(doc.querySelector('.pack-summary .instance-image').getAttribute('src'),'https://cdn.modrinth.com/pack.png');assert.match(doc.querySelector('.instance-play-stats').textContent,/2h 5m/);assert.match(doc.querySelector('.instance-play-stats').textContent,/4 sessions/);dom.window.showPage('library');assert.equal(doc.querySelector('#library-page h1'),null);assert.match(doc.querySelector('.tile-playtime').textContent,/2h 5m/);
+});
+
+test('all Discover categories open from the card body and render description images, dropdowns, gallery and version filters',async t=>{
+ const {dom,doc}=await page(t);
+ const original=dom.window.fetch;
+ let type='modpack';
+ dom.window.fetch=async(url,options)=>{if(url.endsWith('/project'))return{ok:true,json:async()=>({id:'project',title:'Example',project_type:type,description:'Description',body:'<details><summary>More information</summary><p>Expanded content</p><img src="https://i.imgur.com/example.png" onerror="alert(1)"></details>',gallery:[{url:'https://cdn.modrinth.com/example.png',title:'In game',description:'Gallery description'}]})};if(url.endsWith('/versions'))return{ok:true,json:async()=>[{id:'v1',name:'Latest',version_number:'2.0',version_type:'release',game_versions:['1.21.1'],loaders:['fabric'],date_published:'2026-01-01',downloads:100},{id:'v2',name:'Old',version_number:'1.0',version_type:'beta',game_versions:['1.20.1'],loaders:['forge'],date_published:'2025-01-01',downloads:50}]};return original(url,options);};
+ for(type of ['modpack','mod','resourcepack','shader']){
+  doc.querySelector('[data-page="discover"]').click();doc.querySelector('[data-type="'+type+'"]').click();await tick();await tick();
+  const card=doc.querySelector('#results article');assert(card.hasAttribute('data-project'));card.click();await tick();await tick();
+  assert.equal(doc.querySelector('#project-page').hidden,false);assert.equal(doc.querySelector('.project-markdown img').getAttribute('src'),'https://i.imgur.com/example.png');assert.equal(doc.querySelector('.project-markdown img').hasAttribute('onerror'),false);
+  doc.querySelector('.project-markdown summary').click();assert.equal(doc.querySelector('.project-markdown details').open,true);
+  doc.querySelector('[data-project-tab="gallery"]').click();assert.equal(doc.querySelectorAll('.project-gallery img').length,1);
+  doc.querySelector('[data-project-tab="versions"]').click();assert.equal(doc.querySelectorAll('.project-version-table tbody tr').length,2);
+  const filter=doc.querySelector('#project-game-filter');filter.value='1.20.1';filter.dispatchEvent(new dom.window.Event('change'));assert.equal(doc.querySelectorAll('.project-version-table tbody tr').length,1);assert(doc.querySelector('[data-version-install="v2"]'));
+ }
 });

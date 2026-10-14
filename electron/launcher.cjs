@@ -26,10 +26,10 @@ async function syncSettings(game, shared, direction) {
   }
 }
 
-function createLauncher({ directory, library, content, accounts, notify = () => {}, platform = process.platform, install = installer, core = { MinecraftFolder, Version, launch }, fetchJson = json }) {
+function createLauncher({ directory, library, content, accounts, notify = () => {}, now=Date.now, platform = process.platform, install = installer, core = { MinecraftFolder, Version, launch }, fetchJson = json }) {
   const resources = path.join(directory, 'minecraft'), shared = path.join(directory, 'shared-settings');
   const running = new Map(), statuses = new Map(); let preparing = null;
-  const status = (id, value) => { const next = { instanceId: id, ...value }; statuses.set(id,next); notify(next); return next; };
+  const status = (id, value) => { const entry=running.get(id);const next = { instanceId: id, ...(entry?{sessionStartedAt:entry.startedAt,basePlaytimeSeconds:entry.basePlaytimeSeconds}:{}), ...value }; statuses.set(id,next); notify(next); return next; };
   const state = () => [...statuses.values()];
   const active = id => preparing === id || running.has(id);
   function guard(id) { if (active(id)) throw new Error('Stop this Minecraft instance before changing its files or settings.'); }
@@ -109,15 +109,20 @@ function createLauncher({ directory, library, content, accounts, notify = () => 
       if(profile.syncSettings) await syncSettings(game,shared,'pull');
       status(id,{state:'preparing',message:`Starting Minecraft as ${session.name}…`});
       const child=await core.launch({gamePath:game,resourcePath:resources,javaPath:prepared.javaPath,version:prepared.version,gameProfile:{id:session.id,name:session.name},accessToken:session.accessToken,userType:'mojang',launcherName:'MML',launcherBrand:'MML',minMemory:512,maxMemory:profile.memoryMb || 4096,extraExecOption:{windowsHide:true}});
-      running.set(id,{child,syncSettings:profile.syncSettings});
+      const startedAt=now(),entry={child,syncSettings:profile.syncSettings,startedAt,basePlaytimeSeconds:profile.playtimeSeconds||0};running.set(id,entry);
+      let recorded=0,statsFailed=false,statsQueue=Promise.resolve();
+      const started=library.startSession?library.startSession(id,startedAt).catch(()=>{statsFailed=true;}):Promise.resolve();
+      const checkpoint=endedAt=>{statsQueue=statsQueue.then(async()=>{await started;if(!library.recordPlaytime)return;const total=Math.max(0,Math.floor((endedAt-startedAt)/1000)),delta=total-recorded;if(delta>0){try{await library.recordPlaytime(id,delta);recorded=total;}catch{statsFailed=true;}}});return statsQueue;};
+      const heartbeat=setInterval(()=>{if(!entry.closing)checkpoint(now());},60000);heartbeat.unref?.();
+
       const logFile=path.join(content.instancePath(id),'mml-launch.log'); let log='',writeQueue=Promise.resolve();
       const redact=text=>String(text).split(session.accessToken).join('[redacted]').replace(/(--accessToken\s+)\S+/g,'$1[redacted]');
       const logChunk=chunk=>{log=redact(log+String(chunk)).slice(-512*1024);writeQueue=writeQueue.then(()=>fs.writeFile(logFile,log)).catch(()=>{});};
       child.stdout?.on('data',logChunk);child.stderr?.on('data',logChunk);
       child.once('error',error=>{logChunk(error.message); status(id,{state:'error',message:'The Minecraft process could not run. Open Logs for details.'});});
       child.once('close',async code=>{
-        const stopped=running.get(id)?.stopping;await writeQueue;running.delete(id);
-        try{if(profile.syncSettings) await syncSettings(game,shared,'push'); status(id,{state:code===0||stopped?'stopped':'error',message:code===0||stopped?'Minecraft stopped.':`Minecraft exited with code ${code}. Open Logs for details.`});}
+        entry.closing=true;clearInterval(heartbeat);const endedAt=now(),stopped=running.get(id)?.stopping;await writeQueue;await checkpoint(endedAt);running.delete(id);
+        try{if(profile.syncSettings) await syncSettings(game,shared,'push'); status(id,{state:code===0||stopped?'stopped':'error',message:code===0||stopped?(statsFailed?'Minecraft stopped. Some playtime could not be saved.':'Minecraft stopped.'):`Minecraft exited with code ${code}. Open Logs for details.`});}
         catch{status(id,{state:'error',message:'Minecraft stopped, but shared settings could not be saved.'});}
       });
       return status(id,{state:'running',message:`Playing as ${session.name}`});

@@ -10,8 +10,8 @@ async function setup(t){
  const install={createDefaultNodeInstallRuntime:()=>({}),resolveJava:async()=>({majorVersion:21}),resolveMinecraftJarInstallFile:()=>undefined,executeInstallManifest:async()=>{},resolveLibraryInstallFiles:()=>[],resolveAssetMetadataInstallManifest:()=>({tasks:[]}),resolveAssetObjectInstallFiles:async()=>[]};
  const core={MinecraftFolder,Version:{parse:async()=>({id:'1.21.1',libraries:[]})},launch:async value=>{options=value;return child;}};
  const accounts={launchSession:async()=>({id:'1'.repeat(32),name:'TestPlayer',accessToken:'private-access-token'})};
- const engine=createLauncher({directory,library:{list:async()=>[profile]},content,accounts,core,install,platform:'win32'});
- return {directory,profile,content,accounts,engine,child,options:()=>options};
+ let clock=100000;const library={list:async()=>[profile]};const engine=createLauncher({directory,library,now:()=>clock,content,accounts,core,install,platform:'win32'});
+ return {library,advance:seconds=>clock+=seconds*1000,directory,profile,content,accounts,engine,child,options:()=>options};
 }
 test('Play uses a verified account, isolated game directory and memory setting; running instances cannot be modified',async t=>{
  const f=await setup(t);assert.equal((await f.engine.play('instance')).state,'running');
@@ -30,4 +30,8 @@ test('settings sync shares options and servers, backs up prior options and leave
  const f=await setup(t),game=path.join(f.directory,'game'),shared=path.join(f.directory,'shared');await fs.mkdir(game);await fs.writeFile(path.join(game,'options.txt'),'first');await fs.mkdir(path.join(game,'saves'));await fs.writeFile(path.join(game,'saves/world.txt'),'world');
  await syncSettings(game,shared,'pull');assert.equal(await fs.readFile(path.join(shared,'options.txt'),'utf8'),'first');await fs.writeFile(path.join(shared,'options.txt'),'shared');await syncSettings(game,shared,'pull');assert.equal(await fs.readFile(path.join(game,'options.txt'),'utf8'),'shared');assert.equal(await fs.readFile(path.join(game,'options.txt.mml-before-sync'),'utf8'),'first');assert.equal(await fs.readFile(path.join(game,'saves/world.txt'),'utf8'),'world');
  await fs.writeFile(path.join(game,'servers.dat'),'servers');await syncSettings(game,shared,'push');assert.equal(await fs.readFile(path.join(shared,'servers.dat'),'utf8'),'servers');
+});
+
+test('playtime records launched sessions and elapsed gameplay, including manual stop',async t=>{
+ const f=await setup(t);let elapsed=0,starts=0;f.library.startSession=async()=>starts++;f.library.recordPlaytime=async(id,seconds)=>elapsed+=seconds;await f.engine.play('instance');await new Promise(r=>setImmediate(r));assert.equal(starts,1);f.advance(125);f.engine.stop('instance');f.child.emit('close',1);await new Promise(r=>setTimeout(r,25));assert.equal(elapsed,125);assert.equal(f.engine.state()[0].state,'stopped');
 });

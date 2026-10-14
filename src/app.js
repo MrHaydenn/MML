@@ -25,14 +25,17 @@ function toast(message) {
   $('#toast').textContent = message; $('#toast').hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').hidden = true, 4500);
 }
-function showPage(page) {
+function showPage(page,{preserveSkinState=false}={}) {
+  if(state.page==='skin-pixels'&&page!=='skin-pixels'&&!preserveSkinState){if(skinState.busy||!confirmPixelNavigation())return;disposePixelWorkspace();}
+
   state.page = page;
-  for (const name of ['discover', 'library', 'settings', 'project', 'accounts', 'instance', 'skins']) $(`#${name}-page`).hidden = page !== name;
-  $$('[data-page]').forEach(button => button.classList.toggle('active', button.dataset.page === page));
-  $('#breadcrumb').textContent = `Workspace / ${page === 'library' ? 'My library' : page === 'settings' ? 'Settings & about' : page==='skins'?'Skin editor':'Discover'}`;
+  for (const name of ['discover', 'library', 'settings', 'project', 'accounts', 'instance', 'skins', 'skin-pixels','screenshots']) $(`#${name}-page`).hidden = page !== name;
+  $$('[data-page]').forEach(button => button.classList.toggle('active', button.dataset.page === (page==='skin-pixels'?'skins':page)));
+  $('#breadcrumb').textContent = `Workspace / ${page === 'library' ? 'My library' : page === 'settings' ? 'Settings & about' : page==='screenshots'?'Screenshots':page==='skin-pixels'?'Skin texture editor':page==='skins'?'Skin editor':'Discover'}`;
   if(typeof renderInstanceShortcuts==='function')renderInstanceShortcuts();
+  if(page==='screenshots')openScreenshots();else screenshotObserver?.disconnect();
   if (page === 'library') renderLibrary();
-  if(page==='skins')openSkins();else if(typeof disposeSkinPreview==='function')disposeSkinPreview();
+  if(page==='skins'){if(!preserveSkinState)openSkins();}else if(page!=='skin-pixels'&&typeof disposeSkinPreview==='function')disposeSkinPreview();
   if (page === 'accounts') loadMinecraftAccounts();
   window.scrollTo({ top: 0 });
  
@@ -138,7 +141,8 @@ $('#reset-filters').onclick = () => { clearTimeout(searchTimer); $('#search').va
 $('#previous').onclick = () => { state.offset = Math.max(0, state.offset - 12); search(); };
 $('#next').onclick = () => { state.offset += 12; search(); };
 $('#results').onclick = discoveryClick;
-for (const selector of ['#sidebar-create', '#library-create']) $(selector).onclick = () => openCreate();
+$('#results').addEventListener('keydown',event=>{if((event.key==='Enter'||event.key===' ')&&event.target.matches('article[data-project]')){event.preventDefault();showDetails(event.target.dataset.project);}});
+$('#sidebar-create').onclick=()=>openCreate();
 $$('.close-dialog').forEach(button => button.onclick = () => button.closest('dialog').close());
 $('#create-form').onsubmit = async event => {
   event.preventDefault(); $('#save-profile').disabled = true; $('#form-error').textContent = '';
@@ -160,16 +164,16 @@ $('#library-page').onclick = async event => {
   catch (error) { toast(error.message); button.disabled = false; }
 };
 $('#open-library').onclick = () => api.openLibrary().catch(error => toast(error.message));
-document.addEventListener('keydown', event => { if (event.ctrlKey && event.key.toLowerCase() === 'k' && !document.querySelector('dialog[open]')) { event.preventDefault(); showPage('discover'); $('#search').focus(); } });
+document.addEventListener('keydown', event => { if (state.page!=='skin-pixels' && event.ctrlKey && event.key.toLowerCase() === 'k' && !document.querySelector('dialog[open]')) { event.preventDefault(); showPage('discover'); $('#search').focus(); } });
 api.library().then(profiles => { state.profiles = profiles; renderLibrary(); }).catch(error => toast(error.message));
 loadVersions(); search();
 enterWorkspace();
 restoreAccount();
 
 function renderUpdate(status) {
-  $('#app-version').textContent = status.current || '0.8.0';
-  $('.sidebar-version [data-page="settings"]').title=`Settings & about · MML ${status.current||'0.8.0'}`;
-  $('#update-current').textContent = `Installed: MML ${status.current || '0.8.0'}`;
+  $('#app-version').textContent = status.current || '0.9.0';
+  $('.sidebar-version [data-page="settings"]').title=`Settings & about · MML ${status.current||'0.9.0'}`;
+  $('#update-current').textContent = `Installed: MML ${status.current || '0.9.0'}`;
   $('#update-channel').value = status.channel;
   $('#update-status').textContent = status.message;
   const working = ['checking', 'downloading'].includes(status.status);
@@ -196,8 +200,10 @@ if (window.mml) {
     if (status.status === 'available') toast(`MML ${status.latest} is available. Downloading in the background.`);
   });
   updateAction(() => window.mml.updateState());
-} else renderUpdate({ channel: 'stable', current: '0.8.0', status: 'development', message: 'Install the Windows application to check for and install updates.' });
+} else renderUpdate({ channel: 'stable', current: '0.9.0', status: 'development', message: 'Install the Windows application to check for and install updates.' });
 
 initializeInstances();
 initializeDiscovery();
 initializeSkins();
+
+$('#screenshots-refresh').onclick=openScreenshots;$('#screenshots-search').oninput=renderScreenshots;$('#screenshots-content').onclick=screenshotAction;window.addEventListener('focus',()=>{if(state.page==='screenshots')openScreenshots();});

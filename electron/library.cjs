@@ -37,6 +37,8 @@ function createLibrary(directory) {
   }
   return {
     list,
+    startSession:(id,startedAt)=>mutate(profiles=>{const p=profiles.find(p=>p.id===id);if(!p)throw new Error('Instance not found.');p.launchCount=(p.launchCount||0)+1;p.lastPlayedAt=new Date(startedAt).toISOString();p.lastSessionSeconds=0;return profiles;}),
+    recordPlaytime:(id,seconds)=>mutate(profiles=>{if(!Number.isInteger(seconds)||seconds<0||seconds>604800)throw new Error('Invalid playtime.');const p=profiles.find(p=>p.id===id);if(!p)throw new Error('Instance not found.');p.playtimeSeconds=(p.playtimeSeconds||0)+seconds;p.lastSessionSeconds=(p.lastSessionSeconds||0)+seconds;return profiles;}),
     create: input => { const profile = validateProfile(input); return mutate(profiles => [{ ...profile, id: randomUUID(), createdAt: new Date().toISOString() }, ...profiles]); },
     remove: id => mutate(profiles => profiles.filter(p => p.id !== id)),
     update: (id, input) => mutate(profiles => {

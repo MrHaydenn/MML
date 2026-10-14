@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, safeStorage, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, safeStorage, clipboard, nativeImage, ClipboardItem } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
@@ -9,6 +9,7 @@ const { createUpdater } = require('./updater.cjs');
 const { autoUpdater } = require('electron-updater');
 const { createContent } = require('./content.cjs');
 const { createMinecraftAccounts } = require('./minecraft-accounts.cjs');
+const {createScreenshots}=require('./screenshots.cjs');
 const { createSkins } = require('./skins.cjs');
 const { createLauncher } = require('./launcher.cjs');
 const page = path.join(__dirname, '../src/index.html');
@@ -35,6 +36,8 @@ app.whenReady().then(() => {
     return fn(value);
   });
   for (const method of ['search', 'project', 'versions', 'gameVersions']) handle(`modrinth:${method}`, input => api[method](input));
+  const screenshots=createScreenshots({library,nativeImage,writeImage:bytes=>clipboard.write([new ClipboardItem({'image/png':new Blob([bytes],{type:'image/png'})})])});
+  for(const method of ['list','image','copy'])handle('screenshots:'+method,async input=>{await libraryReady;return screenshots[method](input);});
   handle('library:list', async () => { await libraryReady; return library.list(); });
   handle('library:create', async input => { await libraryReady; return library.create(input); });
   handle('library:remove', async id => { await libraryReady; launcher.guard(id); if (id === 'default-vanilla') throw new Error('The latest Vanilla instance is managed automatically.'); return library.remove(id); });
@@ -75,7 +78,7 @@ app.whenReady().then(() => {
   // Preserve initialization errors for the Accounts screen without an unhandled rejection.
   minecraftReady.catch(() => {});
   for (const action of ['state', 'configure', 'poll', 'cancel', 'activate', 'remove', 'refresh']) handle(`minecraft:${action}`, async input => { await minecraftReady; return minecraft[action](input); });
-  handle('minecraft:begin', async () => { await minecraftReady; const result=await minecraft.begin(); clipboard.writeText(result.userCode); return result; });
+  handle('minecraft:begin', async () => { await minecraftReady; const result=await minecraft.begin(); await clipboard.writeText(result.userCode); return result; });
   const skins=createSkins({directory:path.join(app.getPath('userData'),'skins'),accounts:minecraft});
   for(const method of ['list','save','remove','profile','texture','apply','cape'])handle('skins:'+method,async input=>{await minecraftReady;return skins[method](input);});
   launcher=createLauncher({directory:app.getPath('userData'),library,content,accounts:minecraft,notify:status=>{if(!window.isDestroyed())window.webContents.send('launcher:status',status);}});

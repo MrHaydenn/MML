@@ -36,3 +36,7 @@ test('saved cape choices stay local until Apply, which updates both appearance a
 test('an unavailable saved cape is rejected before changing the Minecraft skin',async t=>{
  const {skins,calls}=await fixture(t);const [skin]=await skins.save({accountId:id,name:'Unowned',variant:'classic',data:image(),capeId:'unowned'});await assert.rejects(skins.apply({accountId:id,id:skin.id}),/no longer owns/);assert.equal(calls.filter(c=>c.options.method==='POST').length,0);
 });
+
+test('all nine bundled default skin textures are valid editable Minecraft PNGs',async()=>{
+ const vm=require('node:vm'),context=vm.createContext({});vm.runInContext(await fs.readFile(path.join(__dirname,'../src/default-skins.js'),'utf8'),context);const defaults=vm.runInContext('DEFAULT_SKINS',context);assert.equal(defaults.length,9);assert(defaults.some(s=>s.name==='Steve'));assert(defaults.some(s=>s.name==='Alex'&&s.variant==='slim'));for(const skin of defaults)assert(skinPNG(skin.data).length>0);
+});
