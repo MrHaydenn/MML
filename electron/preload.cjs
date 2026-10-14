@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('mml', {
   installedContent: id => ipcRenderer.invoke('content:list', id),
   openInstance: id => ipcRenderer.invoke('content:open', id),
   onContentStatus: callback => { const listener = (_event, status) => callback(status); ipcRenderer.on('content:status', listener); return () => ipcRenderer.removeListener('content:status', listener); },
+  prepareMinecraft:()=>ipcRenderer.invoke('minecraft:prepare'),
   minecraftState: () => ipcRenderer.invoke('minecraft:state'),
   configureMinecraft: id => ipcRenderer.invoke('minecraft:configure', id),
   beginMinecraft: () => ipcRenderer.invoke('minecraft:begin'),

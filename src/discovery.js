@@ -2,7 +2,7 @@ let discoverProjects = new Map();
 let currentProject = null;
 let currentProjectVersions = [];
 let installSequence = 0;
-let minecraftPollTimer;
+let minecraftPollTimer, minecraftSigningIn=false, pendingMinecraftLaunch=null, minecraftSigninAttempt=0;
 function discoverInstance(){return state.profiles.find(p=>p.id===state.discoverInstanceId);}
 function renderDiscoveryContext(){
   const p=discoverInstance();$('[data-type="modpack"]').hidden=Boolean(p);$('#discover-context').hidden=!p;
@@ -149,16 +149,26 @@ async function openInstall(projectId, versionId = '') {
     $('#install-close').onclick = () => dialog.close();
   }
 }
+function renderMinecraftBadge(){
+ const active=minecraftPlayers.accounts.find(a=>a.id===minecraftPlayers.active),warning=Boolean(active&&(active.needsSignIn||active.expires<=Date.now())),button=$('#minecraft-menu');
+ $('#minecraft-sidebar-name').textContent=active?active.name:'Sign into Minecraft';$('#minecraft-sidebar-avatar').innerHTML=minecraftFace(active);
+ button.querySelector('.minecraft-session-warning')?.remove();
+ if(warning){const badge=document.createElement('span');badge.className='minecraft-session-warning';badge.textContent='!';badge.setAttribute('aria-hidden','true');button.append(badge);}
+ button.title=active?`${active.name}${warning?active.needsSignIn?' — Sign in again':' — Session expired; Play will refresh it automatically':''}`:'Sign into Minecraft';button.setAttribute('aria-label',button.title);
+}
+async function requestMinecraftSignIn(instanceId){
+ pendingMinecraftLaunch=instanceId;showPage('accounts');
+ $('#minecraft-error').textContent='Sign in to Minecraft to continue launching your instance.';
+ if(!minecraftSigningIn&&window.mml){const value=await window.mml.minecraftState();renderMinecraft(value);if(!value.configured){pendingMinecraftLaunch=null;return;}await $('#minecraft-add').onclick();}
+}
+function cancelPendingMinecraftLaunch(message){const id=pendingMinecraftLaunch;pendingMinecraftLaunch=null;if(id){launchStatuses.set(id,{state:'error',message});renderLibrary();renderInstance();}}
 function renderMinecraft(value) {
-  const active = value.accounts.find(a => a.id === value.active);
-  $('#minecraft-sidebar-name').textContent = active ? active.name : 'Sign into Minecraft';
-  $('#minecraft-sidebar-avatar').innerHTML = minecraftFace(active);
-  minecraftPlayers = value;
+  minecraftPlayers = value;renderMinecraftBadge();
   $('#minecraft-client-id').value = value.clientId || '';
   $('#minecraft-config').open = !value.configured;
-  $('#minecraft-add').disabled = !window.mml || !value.configured;
+  $('#minecraft-add').disabled = !window.mml || !value.configured || minecraftSigningIn;
   $('#minecraft-save-config').disabled = !window.mml;
-  $('#minecraft-accounts').innerHTML = value.accounts.map(a => `<div class="minecraft-account"><div class="avatar">${escapeHTML(a.name[0])}</div><div><h2>${escapeHTML(a.name)}</h2><p>${a.id === value.active ? 'Active Minecraft account' : 'Connected account'} · ${a.expires > Date.now() ? 'Session ready' : 'Session needs refreshing'}</p></div><div class="content-actions">${a.id !== value.active ? `<button class="secondary" data-mc-active="${escapeHTML(a.id)}">Use account</button>` : ''}<button class="secondary" data-mc-refresh="${escapeHTML(a.id)}">Refresh</button><button class="text-button" data-mc-remove="${escapeHTML(a.id)}">Sign out</button></div></div>`).join('') || '<div class="notice">No Minecraft account connected. Sign in below to add your Java Edition player.</div>';
+  $('#minecraft-accounts').innerHTML = value.accounts.map(a => `<div class="minecraft-account"><div class="avatar">${escapeHTML(a.name[0])}</div><div><h2>${escapeHTML(a.name)}</h2><p>${a.id === value.active ? 'Active Minecraft account' : 'Connected account'} · ${a.needsSignIn?'Sign in again':a.expires > Date.now() ? 'Session ready' : 'Session expired · automatic refresh on Play'}</p></div><div class="content-actions">${a.id !== value.active ? `<button class="secondary" data-mc-active="${escapeHTML(a.id)}">Use account</button>` : ''}<button class="secondary" data-mc-refresh="${escapeHTML(a.id)}">Refresh</button>${a.needsSignIn||a.expires<=Date.now()?`<button class="primary" data-mc-signin="${escapeHTML(a.id)}">Sign in again</button>`:''}<button class="text-button" data-mc-remove="${escapeHTML(a.id)}">Sign out</button></div></div>`).join('') || '<div class="notice">No Minecraft account connected. Sign in below to add your Java Edition player.</div>';
 }
 async function loadMinecraftAccounts() {
   if (!window.mml) { renderMinecraft({ accounts: [], active: null, configured: false }); $('#minecraft-error').textContent = 'Microsoft sign-in is available in the Windows application.'; return; }
@@ -180,20 +190,21 @@ function initializeDiscovery() {
   window.mml?.onMinecraftStatus?.(status => { $('#minecraft-wait').textContent = `${status.stage}…`; });
   $('#minecraft-open').onclick = () => window.mml.openMinecraftLogin().catch(error => { $('#minecraft-error').textContent = error.message; });
   $('#minecraft-save-config').onclick = async () => { try { renderMinecraft(await window.mml.configureMinecraft($('#minecraft-client-id').value.trim())); $('#minecraft-error').textContent = ''; } catch (error) { $('#minecraft-error').textContent = error.message; } };
-  const poll = async () => {
+  const poll = async attempt => {
     try {
-      const result = await window.mml.pollMinecraft();
-      if (result.pending) { $('#minecraft-wait').textContent = 'Waiting for you to finish sign-in on Microsoft’s website…'; minecraftPollTimer = setTimeout(poll, result.interval); }
-      else { $('#minecraft-device').hidden = true; $('#minecraft-add').disabled = false; renderMinecraft(result); toast('Minecraft account connected.'); }
-    } catch (error) { $('#minecraft-error').textContent = error.message; $('#minecraft-device').hidden = true; $('#minecraft-add').disabled = false; }
+      const result = await window.mml.pollMinecraft();if(attempt!==minecraftSigninAttempt)return;
+      if (result.pending) { $('#minecraft-wait').textContent = 'Waiting for you to finish sign-in on Microsoft’s website…'; minecraftPollTimer = setTimeout(()=>poll(attempt), result.interval); }
+      else { minecraftSigningIn=false;$('#minecraft-device').hidden = true; renderMinecraft(result); toast('Minecraft account connected.');const id=pendingMinecraftLaunch;pendingMinecraftLaunch=null;if(id&&state.profiles.some(p=>p.id===id)){await showInstance(id);await playInstance(id);} }
+    } catch (error) { if(attempt!==minecraftSigninAttempt)return;minecraftSigningIn=false;cancelPendingMinecraftLaunch(error.message);$('#minecraft-error').textContent = error.message; $('#minecraft-device').hidden = true; $('#minecraft-add').disabled = false; }
   };
   $('#minecraft-add').onclick = async () => {
-    clearTimeout(minecraftPollTimer); $('#minecraft-add').disabled = true; $('#minecraft-error').textContent = '';
-    try { const result = await window.mml.beginMinecraft(); $('#minecraft-device').hidden = false; $('#minecraft-code').textContent = result.userCode; $('#minecraft-wait').textContent = 'Code copied to clipboard. Paste it on Microsoft’s sign-in page.'; minecraftPollTimer = setTimeout(poll, result.interval); await window.mml.openMinecraftLogin(); }
-    catch (error) { $('#minecraft-error').textContent = error.message; $('#minecraft-add').disabled = false; }
+    if(minecraftSigningIn)return;const attempt=++minecraftSigninAttempt;minecraftSigningIn=true;clearTimeout(minecraftPollTimer); $('#minecraft-add').disabled = true; $('#minecraft-error').textContent = '';
+    try { const result = await window.mml.beginMinecraft();if(attempt!==minecraftSigninAttempt)return; $('#minecraft-device').hidden = false; $('#minecraft-code').textContent = result.userCode; $('#minecraft-wait').textContent = 'Code copied to clipboard. Paste it on Microsoft’s sign-in page.'; minecraftPollTimer = setTimeout(()=>poll(attempt), result.interval); await window.mml.openMinecraftLogin(); }
+    catch (error) { if(attempt!==minecraftSigninAttempt)return;minecraftSigningIn=false;clearTimeout(minecraftPollTimer);cancelPendingMinecraftLaunch(error.message);$('#minecraft-error').textContent = error.message; $('#minecraft-add').disabled = false; }
   };
-  $('#minecraft-cancel').onclick = async () => { clearTimeout(minecraftPollTimer); await window.mml.cancelMinecraft(); $('#minecraft-device').hidden = true; $('#minecraft-add').disabled = false; };
+  $('#minecraft-cancel').onclick = async () => { clearTimeout(minecraftPollTimer);minecraftSigninAttempt++;minecraftSigningIn=false;cancelPendingMinecraftLaunch('Minecraft sign-in cancelled.'); await window.mml.cancelMinecraft(); $('#minecraft-device').hidden = true; $('#minecraft-add').disabled = false; };
   $('#minecraft-accounts').onclick = async event => {
+    const signin=event.target.closest('[data-mc-signin]');if(signin)return $('#minecraft-add').onclick();
     const active = event.target.closest('[data-mc-active]'), remove = event.target.closest('[data-mc-remove]'), refresh = event.target.closest('[data-mc-refresh]');
     const button = active || remove || refresh; if (!button) return;
     button.disabled = true;
@@ -201,5 +212,6 @@ function initializeDiscovery() {
     catch (error) { $('#minecraft-error').textContent = error.message; button.disabled = false; }
   };
   if (window.mml) window.mml.onContentStatus(status => { if ($('#install-progress')) $('#install-progress').textContent = status.state === 'error' ? status.message : status.state === 'complete' ? 'Installation complete.' : `Downloading ${status.completed + 1}/${status.total}: ${status.file}`; });
+  setInterval(renderMinecraftBadge,30000);window.addEventListener('focus',()=>{if(!minecraftSigningIn&&window.mml)loadMinecraftAccounts();});
   loadMinecraftAccounts();
 }

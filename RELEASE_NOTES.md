@@ -1,14 +1,11 @@
-# MML 0.9.0
+# MML 0.9.1
 
-Discover projects now open by clicking anywhere on a card, with larger titles and descriptions. Project descriptions load HTTPS images and expandable sections, Gallery shows author screenshots, and Versions uses a compact table with compatibility filters and per-version installation.
+Gallery images now expand into a large, aspect-preserving viewer instead of staying at thumbnail size. Navigate project galleries and instance screenshots with left/right buttons or keyboard arrows.
 
-- Added a Screenshots sidebar gallery across active and archived instances, grouped by month, with filenames, instance names, image preview and Copy Image on hover.
-- Added nine core Minecraft default skins; save a copy to your local skin library or edit one.
-- Moved texture pixel editing to a full-page workspace with live rotatable/zoomable 3D preview, canvas zoom and middle-mouse/Space panning, pencil, eraser, fill, eyedropper, line, rectangle, brush size/opacity, mirror, UV guides, flips and undo/redo.
-- Custom instance icons no longer replace the linked modpack content icon.
-- Moved instance settings to a gear at the left of the tab bar and archiving into instance settings. Added playtime, session count and last-played details to instance pages and cards. Playtime records sessions launched from this version onward.
-- Removed excess library heading space, corrected sidebar gear and Minecraft face sizing, and added larger highlighted arrow-only Back controls.
+- Centered the Minecraft sidebar face and added a yellow warning when the active session is expired or needs sign-in.
+- Play checks Minecraft authentication first, refreshes valid sessions automatically, and opens Microsoft sign-in if an account is missing or its refresh credentials were rejected. The selected instance resumes after successful sign-in; cancellation does not launch it. Temporary service failures preserve the account and show an error.
+- Softened the Windows font style and enlarged small labels and controls across project, instance and settings pages.
+- Replaced text Back arrows with centered SVG icons and reduced the project Back row and header spacing.
+- Widened the skin texture editor’s live preview and enabled right-drag panning. Left drag rotates, wheel zooms, and Reset recenters the preview.
 
-Skin libraries stay local. Applying a saved skin/cape changes your Minecraft account through Minecraft services. Default skin textures are unmodified Minecraft assets, © Mojang/Microsoft.
-
-Validation: automated tests, disposable Electron UI checks, live Modrinth description/versions checks, canvas mouse controls, screenshot clipboard image verification and Windows packaging.
+Validation: 68 automated tests, live gallery image/navigation checks, avatar centering, native right-mouse preview panning and minimum-window editor checks, Windows EXE packaging and updater-feed verification.

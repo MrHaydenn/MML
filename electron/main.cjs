@@ -77,7 +77,7 @@ app.whenReady().then(() => {
   const minecraftReady = minecraft.initialize();
   // Preserve initialization errors for the Accounts screen without an unhandled rejection.
   minecraftReady.catch(() => {});
-  for (const action of ['state', 'configure', 'poll', 'cancel', 'activate', 'remove', 'refresh']) handle(`minecraft:${action}`, async input => { await minecraftReady; return minecraft[action](input); });
+  for (const action of ['state', 'prepare', 'configure', 'poll', 'cancel', 'activate', 'remove', 'refresh']) handle(`minecraft:${action}`, async input => { await minecraftReady; return minecraft[action](input); });
   handle('minecraft:begin', async () => { await minecraftReady; const result=await minecraft.begin(); await clipboard.writeText(result.userCode); return result; });
   const skins=createSkins({directory:path.join(app.getPath('userData'),'skins'),accounts:minecraft});
   for(const method of ['list','save','remove','profile','texture','apply','cape'])handle('skins:'+method,async input=>{await minecraftReady;return skins[method](input);});

@@ -142,3 +142,22 @@ test('all Discover categories open from the card body and render description ima
   const filter=doc.querySelector('#project-game-filter');filter.value='1.20.1';filter.dispatchEvent(new dom.window.Event('change'));assert.equal(doc.querySelectorAll('.project-version-table tbody tr').length,1);assert(doc.querySelector('[data-version-install="v2"]'));
  }
 });
+
+test('image viewer navigates both directions with buttons and keyboard, and safely shows metadata',async t=>{
+ const {dom,doc}=await page(t);const items=[{title:'First',url:'https://cdn.modrinth.com/1.png'},{title:'<b>Second</b>',url:'https://cdn.modrinth.com/2.png'}];
+ const dialog=dom.window.openImageViewer({items,index:0,load:async i=>i.url});await tick();assert.equal(dialog.querySelector('img').getAttribute('src'),items[0].url);
+ dialog.querySelector('.image-viewer-next').click();await tick();assert.equal(dialog.querySelector('h2').textContent,'<b>Second</b>');assert.equal(dialog.querySelector('h2 b'),null);assert.equal(dialog.querySelector('.image-viewer-count').textContent,'2 / 2');
+ dialog.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));await tick();assert.equal(dialog.querySelector('img').getAttribute('src'),items[0].url);
+ dialog.querySelector('.image-viewer-previous').click();await tick();assert.equal(dialog.querySelector('img').getAttribute('src'),items[1].url);
+ dialog.querySelector('.lightbox-close').click();dialog.dispatchEvent(new dom.window.Event('close'));assert.equal(doc.querySelector('.image-viewer'),null);
+});
+test('Play starts Microsoft sign-in when needed and resumes only after completion; cancelled sign-in never launches',async t=>{
+ const {dom,doc}=await page(t);let signedIn=false,launched=0,opened=0,poll;
+ const player={id:'player',name:'Player',expires:Date.now()+3600000},auth=()=>({configured:true,clientId:'11111111-1111-1111-1111-111111111111',active:signedIn?'player':null,accounts:signedIn?[player]:[]});
+ dom.window.setTimeout=(callback,ms)=>{if(ms===5000)poll=callback;return 1;};
+ dom.window.mml={minecraftState:async()=>auth(),prepareMinecraft:async()=>({ready:signedIn,...auth()}),beginMinecraft:async()=>({userCode:'CODE',interval:5000}),openMinecraftLogin:async()=>{opened++;},pollMinecraft:async()=>{signedIn=true;return{pending:false,...auth()};},cancelMinecraft:async()=>auth(),playInstance:async()=>{launched++;return{state:'running'};},installedContent:async()=>[]};
+ await dom.window.playInstance('default-vanilla');assert.equal(opened,1);assert.equal(launched,0);assert.equal(doc.querySelector('#accounts-page').hidden,false);assert.equal(doc.querySelector('#minecraft-code').textContent,'CODE');
+ await poll();assert.equal(launched,1);assert.equal(doc.querySelector('#instance-page').hidden,false);
+ signedIn=false;await dom.window.playInstance('default-vanilla');await doc.querySelector('#minecraft-cancel').onclick();assert.equal(launched,1);
+ dom.window.renderMinecraft({...auth(),active:'player',accounts:[{...player,expires:0}]});assert(doc.querySelector('.minecraft-session-warning'));dom.window.renderMinecraft({...auth(),active:'player',accounts:[player]});assert.equal(doc.querySelector('.minecraft-session-warning'),null);
+});

@@ -125,3 +125,5 @@ Screenshots aggregates each instance’s `game/screenshots` folder, including ar
 Nine default Minecraft skins can be copied into the local skin library. Default textures are unmodified assets from Minecraft 26.3 (`assets/minecraft/textures/entity/player`), © Mojang/Microsoft. The full-page texture editor provides drawing tools, live 3D preview, undo/redo, zoom and panning. Saving stays local; Apply changes your signed-in Minecraft account.
 
 Playtime starts being recorded with 0.9.0, using the lifetime of Minecraft processes launched by MML, with periodic checkpoints. Earlier gameplay cannot be reconstructed.
+
+Gallery images use a large viewer with left/right buttons and keyboard navigation. The Minecraft sidebar warns when a session expires. Play silently refreshes valid credentials and starts Microsoft sign-in only when needed, then resumes the selected instance after completion. Skin texture previews support left-drag rotation, right-drag panning, wheel zoom and Reset.

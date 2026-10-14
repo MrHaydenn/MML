@@ -10,7 +10,7 @@ function profileSkin(profile) {
 function createMinecraftAccounts({ directory, safeStorage, fetcher = fetch, clientId: bundledId = process.env.MML_MICROSOFT_CLIENT_ID || '', now = Date.now, notify = () => {} }) {
   const file = path.join(directory, 'minecraft-accounts.bin'), configFile = path.join(directory, 'minecraft-auth.json');
   let data = { accounts: [], active: null }, clientId = bundledId, pending = null, busy = false, generation = 0;
-  const state = () => ({ configured: Boolean(clientId), clientId, active: data.active, accounts: data.accounts.map(({ id, name, expires, skinUrl }) => ({ id, name, expires, skinUrl })) });
+  const state = () => ({ configured: Boolean(clientId), clientId, active: data.active, accounts: data.accounts.map(({ id, name, expires, skinUrl, needsSignIn }) => ({ id, name, expires, skinUrl, needsSignIn:Boolean(needsSignIn) })) });
   async function save() {
     if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows credential encryption is unavailable.');
     await fs.mkdir(directory, { recursive: true });
@@ -49,20 +49,32 @@ function createMinecraftAccounts({ directory, safeStorage, fetcher = fetch, clie
     return { id: profile.id, name: profile.name, skinUrl, refreshToken: tokens.refresh_token, accessToken: minecraft.access_token, expires: now() + minecraft.expires_in * 1000, clientId };
   }
   async function exclusive(fn) { if (busy) throw new Error('An account operation is already running.'); busy = true; try { return await fn(); } finally { busy = false; } }
+  function signInRequired(){const error=new Error('Your Minecraft session needs a new Microsoft sign-in.');error.code='MML_SIGN_IN_REQUIRED';return error;}
+  async function refreshAccount(account){
+    if(account.needsSignIn)throw signInRequired();
+    let refreshed;
+    try{
+      const tokens=await request(OAUTH+'token',new URLSearchParams({client_id:account.clientId,grant_type:'refresh_token',refresh_token:account.refreshToken,scope:SCOPE}));
+      refreshed=await exchange(tokens);
+      if(refreshed.id!==account.id){account.needsSignIn=true;await save();throw signInRequired();}
+    }catch(error){
+      if(['invalid_grant','interaction_required','login_required','consent_required'].includes(error.code)){account.needsSignIn=true;await save();throw signInRequired();}
+      throw error;
+    }
+    const previous=data;data={...data,accounts:data.accounts.map(a=>a.id===refreshed.id?{...refreshed,clientId:account.clientId}:a)};
+    try{await save();}catch(error){data=previous;throw error;}return data.accounts.find(a=>a.id===refreshed.id);
+  }
+  const launchSession=()=>exclusive(async()=>{
+    let account=data.accounts.find(a=>a.id===data.active);
+    if(!account||account.needsSignIn)throw signInRequired();
+    if(account.expires<now()+300000)account=await refreshAccount(account);
+    return{id:account.id,name:account.name,accessToken:account.accessToken};
+  });
   return {
     state,
     cacheProfile: profile=>exclusive(async()=>{const account=data.accounts.find(a=>a.id===profile.id);if(!account)throw new Error('Minecraft account changed.');const before=account.skinUrl;account.skinUrl=profileSkin(profile);try{await save();}catch(error){account.skinUrl=before;throw error;}return state();}),
-    launchSession: () => exclusive(async () => {
-      let account = data.accounts.find(a => a.id === data.active);
-      if (!account) throw new Error('Sign into a Minecraft Java account before playing.');
-      if (account.expires < now() + 300000) {
-        const tokens = await request(OAUTH + 'token', new URLSearchParams({ client_id: account.clientId, grant_type: 'refresh_token', refresh_token: account.refreshToken, scope: SCOPE }));
-        const refreshed = await exchange(tokens); if (refreshed.id !== account.id) throw new Error('Microsoft returned a different account. Sign in again.');
-        const previous = data; data = { ...data, accounts: data.accounts.map(a => a.id === refreshed.id ? { ...refreshed, clientId: account.clientId } : a) };
-        try { await save(); } catch(error) { data = previous; throw error; } account = data.accounts.find(a => a.id === data.active);
-      }
-      return { id: account.id, name: account.name, accessToken: account.accessToken };
-    }),
+    launchSession,
+    prepare:async()=>{try{await launchSession();return {ready:true,...state()};}catch(error){if(error.code==='MML_SIGN_IN_REQUIRED')return {ready:false,needsSignIn:true,...state()};throw error;}},
     initialize: () => exclusive(async () => {
       try { const saved = JSON.parse(await fs.readFile(configFile, 'utf8')); if (!bundledId && /^[a-f0-9-]{36}$/i.test(saved.clientId || '')) clientId = saved.clientId; } catch (error) { if (error.code !== 'ENOENT') throw new Error('Minecraft sign-in settings could not be read.'); }
       try { if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows encryption unavailable'); data = JSON.parse(safeStorage.decryptString(await fs.readFile(file))); if (!Array.isArray(data.accounts)) throw new Error('Invalid accounts'); }
@@ -118,12 +130,7 @@ function createMinecraftAccounts({ directory, safeStorage, fetcher = fetch, clie
       const previous = data; const accounts = data.accounts.filter(a => a.id !== id); data = { accounts, active: data.active === id ? accounts[0]?.id || null : data.active };
       try { await save(); } catch (error) { data = previous; throw error; } return state();
     }),
-    refresh: id => exclusive(async () => {
-      const account = data.accounts.find(a => a.id === id); if (!account) throw new Error('Account not found.');
-      const tokens = await request(OAUTH + 'token', new URLSearchParams({ client_id: account.clientId, grant_type: 'refresh_token', refresh_token: account.refreshToken, scope: SCOPE }));
-      const refreshed = await exchange(tokens); if (refreshed.id !== id) throw new Error('Microsoft returned a different account; sign in again.');
-      data.accounts = data.accounts.map(a => a.id === id ? { ...refreshed, clientId: account.clientId } : a); await save(); return state();
-    })
+    refresh:id=>exclusive(async()=>{const account=data.accounts.find(a=>a.id===id);if(!account)throw new Error('Account not found.');await refreshAccount(account);return state();})
   };
 }
 module.exports = { createMinecraftAccounts };

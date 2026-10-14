@@ -67,3 +67,19 @@ test('missing application registration or unavailable encryption blocks sign-in 
   const unconfigured = createMinecraftAccounts({ ...f.options, clientId: '' }); await unconfigured.initialize(); await assert.rejects(unconfigured.begin(), /client ID/);
   const unavailable = createMinecraftAccounts({ ...f.options, safeStorage: { isEncryptionAvailable: () => false } }); await assert.rejects(unavailable.begin(), /encryption/);
 });
+
+test('launch preparation refreshes expiring sessions without exposing credentials, and missing accounts request sign-in',async t=>{
+ const f=await fixture(t);assert.equal((await f.accounts.prepare()).ready,false);
+ await f.accounts.begin();f.advance();await f.accounts.poll();f.advance(4000000);
+ const result=await f.accounts.prepare();assert.equal(result.ready,true);assert(!JSON.stringify(result).includes('secret'));assert(result.accounts[0].expires>4000000);
+});
+test('revoked refresh tokens persist a sign-in warning and successful sign-in clears it',async t=>{
+ const f=await fixture(t);await f.accounts.begin();f.advance();await f.accounts.poll();f.advance(4000000);f.mode('invalid_grant');
+ const result=await f.accounts.prepare();assert.equal(result.ready,false);assert.equal(result.accounts[0].needsSignIn,true);
+ const restored=createMinecraftAccounts(f.options);assert.equal((await restored.initialize()).accounts[0].needsSignIn,true);
+ f.mode('');await f.accounts.begin();f.advance();const signedIn=await f.accounts.poll();assert.equal(signedIn.accounts[0].needsSignIn,false);assert.equal((await f.accounts.prepare()).ready,true);
+});
+test('service errors during refresh preserve accounts and do not request a new browser sign-in',async t=>{
+ const f=await fixture(t);await f.accounts.begin();f.advance();await f.accounts.poll();f.advance(4000000);f.mode('temporarily_unavailable');
+ await assert.rejects(f.accounts.prepare(),/Microsoft authorization failed/);assert.equal(f.accounts.state().accounts[0].needsSignIn,false);assert.equal(f.accounts.state().accounts.length,1);
+});
